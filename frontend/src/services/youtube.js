@@ -116,7 +116,7 @@ export const fetchYouTubePublic = async (query, limit = 20) => {
               cover_url: coverUrl,
               image: coverUrl,
               artwork: coverUrl,
-              audio_url: `https://inv.tux.pizza/latest_version?id=${encodeURIComponent((item.trackName || '') + ' ' + (item.artistName || ''))}&itag=140`,
+              audio_url: item.previewUrl || '',
               source: 'youtube',
             };
           });
