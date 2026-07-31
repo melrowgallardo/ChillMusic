@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Box, InputBase, IconButton, Avatar, Menu, MenuItem, Button, Tooltip } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
+import { Box, IconButton, Avatar, Menu, MenuItem, Button, Tooltip } from '@mui/material';
 import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
@@ -18,15 +17,7 @@ const Navbar = () => {
   const { user, logout } = useAuth();
   const { mode, toggleTheme } = useThemeMode();
   const { clearQueue } = usePlayer();
-  const [searchQuery, setSearchQuery] = useState('');
   const [anchorEl, setAnchorEl] = useState(null);
-
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-    }
-  };
 
   return (
     <Box
@@ -55,39 +46,6 @@ const Navbar = () => {
           <IconButton size="small" onClick={() => navigate(1)} sx={{ color: 'var(--text-secondary)' }}>
             <ArrowForwardIosIcon fontSize="small" />
           </IconButton>
-        </Box>
-
-        {/* Search Bar Form */}
-        <Box
-          component="form"
-          onSubmit={handleSearchSubmit}
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: 'var(--bg-glass-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-full)',
-            px: 2,
-            py: 0.5,
-            width: '100%',
-            transition: 'all 0.2s',
-            '&:focus-within': {
-              borderColor: 'var(--accent-primary)',
-              boxShadow: '0 0 15px var(--accent-glow)',
-            },
-          }}
-        >
-          <SearchIcon sx={{ color: 'var(--text-muted)', mr: 1 }} />
-          <InputBase
-            placeholder="Search songs, artists, albums..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            sx={{
-              color: 'var(--text-primary)',
-              width: '100%',
-              fontSize: '0.9rem',
-            }}
-          />
         </Box>
       </Box>
 

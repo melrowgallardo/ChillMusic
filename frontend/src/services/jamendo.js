@@ -12,112 +12,83 @@ const fetchWithTimeout = async (url, timeoutMs = 3000) => {
   }
 };
 
-// Resilient public music search fallback (Jamendo + Audius full songs + iTunes with CORS proxy support)
+// Resilient public music search fallback (YouTube full songs + Deezer Albums & Artists)
 const fallbackUnifiedSearch = async (query, limit = 20) => {
-  const fetchiTunes = async () => {
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&limit=${limit}&media=music`;
-    const parseResults = (results) =>
-      (results || []).map((item) => {
-        const coverUrl = (item.artworkUrl100 || '').replace('100x100bb', '600x600bb');
-        return {
-          id: String(item.trackId || Math.random()),
-          title: item.trackName || 'Unknown Title',
-          artist: item.artistName || 'Unknown Artist',
-          artist_name: item.artistName || 'Unknown Artist',
-          album: item.collectionName || 'Single',
-          album_title: item.collectionName || 'Single',
-          duration: Math.round((item.trackTimeMillis || 180000) / 1000),
-          image_url: coverUrl,
-          cover_url: coverUrl,
-          image: coverUrl,
-          artwork: coverUrl,
-          audio_url: item.previewUrl || '',
-          source: 'itunes',
-        };
-      });
-
-    try {
-      const res = await fetchWithTimeout(url, 3000);
-      if (res.ok) {
-        const data = await res.json();
-        return parseResults(data.results);
-      }
-    } catch (err) {
-      console.warn('Direct iTunes fetch failed or blocked, trying CORS proxy...');
-    }
-
-    try {
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const res = await fetchWithTimeout(proxyUrl, 3000);
-      if (res.ok) {
-        const data = await res.json();
-        return parseResults(data.results);
-      }
-    } catch (proxyErr) {
-      console.warn('iTunes CORS proxy fallback failed:', proxyErr);
+  const fetchDeezerAlbums = async () => {
+    const urls = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.deezer.com/search/album?q=${query}&limit=${limit}`)}`,
+      `https://corsproxy.io/?${encodeURIComponent(`https://api.deezer.com/search/album?q=${query}&limit=${limit}`)}`,
+      `https://api.deezer.com/search/album?q=${encodeURIComponent(query)}&limit=${limit}`,
+    ];
+    for (const url of urls) {
+      try {
+        const res = await fetchWithTimeout(url, 3500);
+        if (res.ok) {
+          const json = await res.json();
+          const items = json.data || [];
+          const albums = items
+            .map((item) => ({
+              id: `dz_${item.id}`,
+              title: item.title || 'Unknown Album',
+              artist: item.artist?.name || 'Unknown Artist',
+              image_url:
+                item.cover_xl ||
+                item.cover_big ||
+                item.cover_medium ||
+                item.cover ||
+                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+              cover_url:
+                item.cover_xl ||
+                item.cover_big ||
+                item.cover_medium ||
+                item.cover ||
+                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+              tracks_count: item.nb_tracks || 10,
+              source: 'deezer',
+            }))
+            .filter((a) => a.title);
+          if (albums.length > 0) return albums;
+        }
+      } catch (err) {}
     }
     return [];
   };
 
-  const fetchJamendo = async () => {
-    const clientId = import.meta.env.VITE_JAMENDO_CLIENT_ID || 'aee77fe5';
-    try {
-      const url = `https://api.jamendo.com/v3.0/tracks/?client_id=${clientId}&format=jsonpretty&limit=${limit}&search=${encodeURIComponent(query)}&include=musicinfo`;
-      const res = await fetchWithTimeout(url, 3000);
-      if (res.ok) {
-        const data = await res.json();
-        return (data.results || []).map((item) => {
-          const coverUrl = item.image || '';
-          return {
-            id: String(item.id),
-            title: item.name || 'Unknown Title',
-            artist: item.artist_name || 'Unknown Artist',
-            artist_name: item.artist_name || 'Unknown Artist',
-            album: item.album_name || 'Single',
-            album_title: item.album_name || 'Single',
-            duration: parseInt(item.duration || 180, 10),
-            image_url: coverUrl,
-            cover_url: coverUrl,
-            image: coverUrl,
-            artwork: coverUrl,
-            audio_url: item.audio || '',
-            source: 'jamendo',
-          };
-        });
-      }
-    } catch (err) {
-      console.warn('Jamendo fetch failed or timed out:', err);
-    }
-    return [];
-  };
-
-  const fetchAudius = async () => {
-    try {
-      const url = `https://discoveryprovider.audius.co/v1/tracks/search?query=${encodeURIComponent(query)}&limit=${limit}&app_name=chillmusic`;
-      const res = await fetchWithTimeout(url, 3000);
-      if (res.ok) {
-        const data = await res.json();
-        return (data.data || []).map((item) => {
-          const coverUrl = item.artwork?.['1000x1000'] || item.artwork?.['480x480'] || item.artwork?.['150x150'] || '';
-          return {
-            id: String(item.id),
-            title: item.title || 'Unknown Title',
-            artist: item.user?.name || 'Unknown Artist',
-            artist_name: item.user?.name || 'Unknown Artist',
-            album: item.title || 'Single',
-            album_title: item.title || 'Single',
-            duration: parseInt(item.duration || 180, 10),
-            image_url: coverUrl,
-            cover_url: coverUrl,
-            image: coverUrl,
-            artwork: coverUrl,
-            audio_url: `https://discoveryprovider.audius.co/v1/tracks/${item.id}/stream?app_name=chillmusic`,
-            source: 'audius',
-          };
-        });
-      }
-    } catch (err) {
-      console.warn('Audius fetch failed or timed out:', err);
+  const fetchDeezerArtists = async () => {
+    const urls = [
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.deezer.com/search/artist?q=${query}&limit=${limit}`)}`,
+      `https://corsproxy.io/?${encodeURIComponent(`https://api.deezer.com/search/artist?q=${query}&limit=${limit}`)}`,
+      `https://api.deezer.com/search/artist?q=${encodeURIComponent(query)}&limit=${limit}`,
+    ];
+    for (const url of urls) {
+      try {
+        const res = await fetchWithTimeout(url, 3500);
+        if (res.ok) {
+          const json = await res.json();
+          const items = json.data || [];
+          const artists = items
+            .map((item) => ({
+              id: `dz_art_${item.id}`,
+              name: item.name || 'Unknown Artist',
+              image_url:
+                item.picture_xl ||
+                item.picture_big ||
+                item.picture_medium ||
+                item.picture ||
+                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+              cover_url:
+                item.picture_xl ||
+                item.picture_big ||
+                item.picture_medium ||
+                item.picture ||
+                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+              nb_album: item.nb_album || 5,
+              source: 'deezer',
+            }))
+            .filter((a) => a.name);
+          if (artists.length > 0) return artists;
+        }
+      } catch (err) {}
     }
     return [];
   };
@@ -299,21 +270,17 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     const results = await Promise.allSettled([
       fetchYouTube(),
       fetchSaavn(),
-      fetchAudius(),
-      fetchJamendo(),
-      fetchiTunes(),
+      fetchDeezerAlbums(),
+      fetchDeezerArtists(),
     ]);
 
     const youtubeTracks = results[0].status === 'fulfilled' ? results[0].value : [];
     const saavnTracks = results[1].status === 'fulfilled' ? results[1].value : [];
-    const audiusTracks = results[2].status === 'fulfilled' ? results[2].value : [];
-    const jamendoTracks = results[3].status === 'fulfilled' ? results[3].value : [];
+    const deezerAlbums = results[2].status === 'fulfilled' ? results[2].value : [];
+    const deezerArtists = results[3].status === 'fulfilled' ? results[3].value : [];
 
-    // Strictly prioritize YouTube and JioSaavn full-length music (>60 seconds).
-    // Only fall back to Audius/Jamendo if neither YouTube nor Saavn found any results.
-    const primaryFullTracks = [...youtubeTracks, ...saavnTracks].filter((t) => t.duration > 60);
-    const fallbackTracks = [...audiusTracks, ...jamendoTracks].filter((t) => t.duration > 60);
-    const combined = primaryFullTracks.length > 0 ? primaryFullTracks : fallbackTracks;
+    // ONLY use full-length songs from YouTube (with JioSaavn backup). Never use Jamendo or Audius!
+    const combined = [...youtubeTracks, ...saavnTracks].filter((t) => t.duration > 60);
     const uniqueSongs = [];
     const seenIds = new Set();
     for (const song of combined) {
@@ -325,6 +292,21 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
 
     const artistsMap = new Map();
     const albumsMap = new Map();
+
+    // Populate official Deezer Albums first, then fallback to album names from tracks
+    deezerAlbums.forEach((a) => {
+      if (!albumsMap.has(a.title)) {
+        albumsMap.set(a.title, a);
+      }
+    });
+
+    // Populate official Deezer Artists first, then fallback to artist names from tracks
+    deezerArtists.forEach((a) => {
+      if (!artistsMap.has(a.name)) {
+        artistsMap.set(a.name, a);
+      }
+    });
+
     uniqueSongs.forEach((t) => {
       if (t.artist && !artistsMap.has(t.artist)) {
         artistsMap.set(t.artist, {
