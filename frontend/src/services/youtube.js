@@ -13,16 +13,25 @@ const fetchWithTimeout = async (url, timeoutMs = 3000) => {
 };
 
 export const fetchYouTubePublic = async (query, limit = 20) => {
-  const mirrors = [
-    `https://pipedapi.kavin.rocks/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
-    `https://api.piped.ovh/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
-    `https://pipedapi.kavin.rocks/streams?q=${encodeURIComponent(query)}`,
+  const directMirrors = [
+    `https://pipedapi.tokhmi.xyz/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
+    `https://pipedapi.in.projectsegfau.lt/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
+    `https://api.piped.privacydev.net/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
+    `https://api.piped.projectsegfau.lt/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
+    `https://invidious.projectsegfau.lt/api/v1/search?q=${encodeURIComponent(query)}`,
+    `https://inv.tux.pizza/api/v1/search?q=${encodeURIComponent(query)}`,
     `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(query)}`,
+  ];
+
+  const mirrors = [
+    ...directMirrors,
+    ...directMirrors.slice(0, 3).map((url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`),
+    ...directMirrors.slice(0, 3).map((url) => `https://corsproxy.io/?${encodeURIComponent(url)}`),
   ];
 
   for (const url of mirrors) {
     try {
-      const res = await fetchWithTimeout(url, 3000);
+      const res = await fetchWithTimeout(url, 3500);
       if (res.ok) {
         const json = await res.json();
         const items = json.items || (Array.isArray(json) ? json : []) || [];
@@ -49,8 +58,8 @@ export const fetchYouTubePublic = async (query, limit = 20) => {
               (item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : '') ||
               `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-            const dur = parseInt(item.duration || 210, 10);
-            const audioUrl = `https://invidious.nerdvpn.de/latest_version?id=${videoId}&itag=140`;
+            const dur = parseInt(item.duration || item.lengthSeconds || item.length || 210, 10);
+            const audioUrl = `https://inv.tux.pizza/latest_version?id=${videoId}&itag=140`;
 
             return {
               id: `yt_${videoId}`,

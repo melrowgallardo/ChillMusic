@@ -218,13 +218,20 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
   };
 
   const fetchYouTube = async () => {
-    const mirrors = [
+    const directMirrors = [
+      `https://pipedapi.tokhmi.xyz/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
       `https://pipedapi.in.projectsegfau.lt/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
       `https://api.piped.privacydev.net/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
-      `https://pipedapi.us.projectsegfau.lt/streams?q=${encodeURIComponent(query)}`,
+      `https://api.piped.projectsegfau.lt/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
       `https://invidious.projectsegfau.lt/api/v1/search?q=${encodeURIComponent(query)}`,
       `https://inv.tux.pizza/api/v1/search?q=${encodeURIComponent(query)}`,
       `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(query)}`,
+    ];
+
+    const mirrors = [
+      ...directMirrors,
+      ...directMirrors.slice(0, 3).map((url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`),
+      ...directMirrors.slice(0, 3).map((url) => `https://corsproxy.io/?${encodeURIComponent(url)}`),
     ];
 
     for (const url of mirrors) {
@@ -256,7 +263,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
                 (item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : '') ||
                 `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-              const dur = parseInt(item.duration || 210, 10);
+              const dur = parseInt(item.duration || item.lengthSeconds || item.length || 210, 10);
               const audioUrl = `https://inv.tux.pizza/latest_version?id=${videoId}&itag=140`;
 
               return {
@@ -301,12 +308,12 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     const saavnTracks = results[1].status === 'fulfilled' ? results[1].value : [];
     const audiusTracks = results[2].status === 'fulfilled' ? results[2].value : [];
     const jamendoTracks = results[3].status === 'fulfilled' ? results[3].value : [];
-    const itunesTracks = results[4].status === 'fulfilled' ? results[4].value : [];
 
-    // Prioritize FULL-LENGTH songs from YouTube, JioSaavn, Audius, and Jamendo.
-    // Exclude iTunes 30-second clips so the user always gets full-length music!
-    const allFullTracks = [...youtubeTracks, ...saavnTracks, ...audiusTracks, ...jamendoTracks].filter((t) => t.duration > 60);
-    const combined = allFullTracks.length > 0 ? allFullTracks : [...itunesTracks, ...allFullTracks];
+    // Strictly prioritize YouTube and JioSaavn full-length music (>60 seconds).
+    // Only fall back to Audius/Jamendo if neither YouTube nor Saavn found any results.
+    const primaryFullTracks = [...youtubeTracks, ...saavnTracks].filter((t) => t.duration > 60);
+    const fallbackTracks = [...audiusTracks, ...jamendoTracks].filter((t) => t.duration > 60);
+    const combined = primaryFullTracks.length > 0 ? primaryFullTracks : fallbackTracks;
     const uniqueSongs = [];
     const seenIds = new Set();
     for (const song of combined) {

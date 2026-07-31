@@ -43,10 +43,10 @@ const Search = () => {
   }, [query]);
 
   const performSearch = async (searchTerm, source = 'all') => {
-    if (!searchTerm || !searchTerm.trim()) return;
+    const term = (!searchTerm || !searchTerm.trim()) ? 'Top Hits' : searchTerm.trim();
     setLoading(true);
     try {
-      const data = await searchUnified(searchTerm, 20, source);
+      const data = await searchUnified(term, 20, source);
       setSongs(data.songs || []);
       setArtists(data.artists || []);
       setAlbums(data.albums || []);
