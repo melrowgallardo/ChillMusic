@@ -203,21 +203,92 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     }
   };
 
+  const fetchYouTube = async () => {
+    const mirrors = [
+      `https://pipedapi.kavin.rocks/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
+      `https://api.piped.ovh/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
+      `https://pipedapi.kavin.rocks/streams?q=${encodeURIComponent(query)}`,
+      `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(query)}`,
+    ];
+
+    for (const url of mirrors) {
+      try {
+        const res = await fetchWithTimeout(url, 3000);
+        if (res.ok) {
+          const json = await res.json();
+          const items = json.items || (Array.isArray(json) ? json : []) || [];
+          const tracks = items
+            .slice(0, limit)
+            .map((item) => {
+              let videoId = item.id || '';
+              if (!videoId && item.url) {
+                videoId = item.url.replace('/watch?v=', '').split('&')[0];
+              }
+              if (!videoId && item.videoId) {
+                videoId = item.videoId;
+              }
+              if (!videoId) return null;
+
+              let title = item.title || 'Unknown YouTube Track';
+              title = title.replace(/\s*\(?(Official\s*(Music)?\s*Video|M\/V|MV|Audio|Lyric\s*Video)\)?/gi, '').trim();
+
+              let artistName = item.uploaderName || item.author || item.uploader || 'YouTube Artist';
+              artistName = artistName.replace(/\s*(- Topic|Official|Channel|VEVO)/gi, '').trim();
+
+              const coverUrl =
+                item.thumbnail ||
+                (item.thumbnails && item.thumbnails.length > 0 ? item.thumbnails[0].url : '') ||
+                `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+              const dur = parseInt(item.duration || 210, 10);
+              const audioUrl = `https://invidious.nerdvpn.de/latest_version?id=${videoId}&itag=140`;
+
+              return {
+                id: `yt_${videoId}`,
+                title,
+                artist: artistName,
+                artist_name: artistName,
+                album: 'YouTube Music',
+                album_title: 'YouTube Music',
+                duration: dur,
+                image_url: coverUrl,
+                cover_url: coverUrl,
+                image: coverUrl,
+                artwork: coverUrl,
+                audio_url: audioUrl,
+                source: 'youtube',
+              };
+            })
+            .filter(Boolean);
+
+          if (tracks.length > 0) {
+            return tracks;
+          }
+        }
+      } catch (err) {
+        console.warn('YouTube search mirror failed:', url, err);
+      }
+    }
+    return [];
+  };
+
   try {
     const results = await Promise.allSettled([
-      fetchSaavn(),
-      fetchJamendo(),
-      fetchAudius(),
+      fetchYouTube(),
       fetchiTunes(),
+      fetchSaavn(),
+      fetchAudius(),
+      fetchJamendo(),
     ]);
 
-    const saavnTracks = results[0].status === 'fulfilled' ? results[0].value : [];
-    const jamendoTracks = results[1].status === 'fulfilled' ? results[1].value : [];
-    const audiusTracks = results[2].status === 'fulfilled' ? results[2].value : [];
-    const itunesTracks = results[3].status === 'fulfilled' ? results[3].value : [];
+    const youtubeTracks = results[0].status === 'fulfilled' ? results[0].value : [];
+    const itunesTracks = results[1].status === 'fulfilled' ? results[1].value : [];
+    const saavnTracks = results[2].status === 'fulfilled' ? results[2].value : [];
+    const audiusTracks = results[3].status === 'fulfilled' ? results[3].value : [];
+    const jamendoTracks = results[4].status === 'fulfilled' ? results[4].value : [];
 
-    // Put full-length mainstream music (Saavn) first, then Jamendo & Audius full songs, then iTunes previews
-    const combined = [...saavnTracks, ...jamendoTracks, ...audiusTracks, ...itunesTracks];
+    // Prioritize YouTube -> iTunes Apple Music -> Saavn -> Audius/Jamendo indie tracks last
+    const combined = [...youtubeTracks, ...itunesTracks, ...saavnTracks, ...audiusTracks, ...jamendoTracks];
     const uniqueSongs = [];
     const seenIds = new Set();
     for (const song of combined) {
