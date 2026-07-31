@@ -124,13 +124,16 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
 
   const fetchSaavn = async () => {
     const urls = [
-      `https://saavn.me/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
       `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
-      `https://jiosaavn-api-privatecv-101.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
+      `https://jiosaavn-api-v2.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
+      `https://saavn-api.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
+      `https://jiosaavn-api-sam.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
+      `https://jiosaavn-api-sigma-six.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
+      `https://saavn.me/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
     ];
 
     const promises = urls.map(async (url) => {
-      const res = await fetchWithTimeout(url, 3000);
+      const res = await fetchWithTimeout(url, 3500);
       if (!res.ok) throw new Error('Not OK');
       const json = await res.json();
       const results = json.data?.results || (Array.isArray(json.data) ? json.data : []) || [];
@@ -147,12 +150,23 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
           coverUrl = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
         }
 
-        const audioList = item.downloadUrl || item.url || item.media_preview_url || [];
         let audioUrl = '';
+        const audioList = item.downloadUrl || item.url || item.media_preview_url || [];
         if (Array.isArray(audioList) && audioList.length > 0) {
-          const lastAudio = audioList[audioList.length - 1];
-          audioUrl = typeof lastAudio === 'object' ? (lastAudio.url || lastAudio.link || '') : typeof lastAudio === 'string' ? lastAudio : '';
-        } else if (typeof audioList === 'string') {
+          for (let i = audioList.length - 1; i >= 0; i--) {
+            const entry = audioList[i];
+            const u = typeof entry === 'object' ? (entry.url || entry.link || '') : typeof entry === 'string' ? entry : '';
+            if (u && (u.includes('.mp3') || u.includes('.m4a') || u.includes('.aac') || u.includes('saavncdn') || u.includes('cdn'))) {
+              audioUrl = u;
+              break;
+            }
+          }
+          if (!audioUrl) {
+            const last = audioList[audioList.length - 1];
+            const u = typeof last === 'object' ? (last.url || last.link || '') : typeof last === 'string' ? last : '';
+            if (u && !u.includes('jiosaavn.com/song')) audioUrl = u;
+          }
+        } else if (typeof audioList === 'string' && !audioList.includes('jiosaavn.com/song')) {
           audioUrl = audioList;
         }
 
@@ -205,15 +219,17 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
 
   const fetchYouTube = async () => {
     const mirrors = [
-      `https://pipedapi.kavin.rocks/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
-      `https://api.piped.ovh/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
-      `https://pipedapi.kavin.rocks/streams?q=${encodeURIComponent(query)}`,
+      `https://pipedapi.in.projectsegfau.lt/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
+      `https://api.piped.privacydev.net/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
+      `https://pipedapi.us.projectsegfau.lt/streams?q=${encodeURIComponent(query)}`,
+      `https://invidious.projectsegfau.lt/api/v1/search?q=${encodeURIComponent(query)}`,
+      `https://inv.tux.pizza/api/v1/search?q=${encodeURIComponent(query)}`,
       `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(query)}`,
     ];
 
     for (const url of mirrors) {
       try {
-        const res = await fetchWithTimeout(url, 3000);
+        const res = await fetchWithTimeout(url, 3500);
         if (res.ok) {
           const json = await res.json();
           const items = json.items || (Array.isArray(json) ? json : []) || [];
@@ -241,7 +257,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
                 `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
               const dur = parseInt(item.duration || 210, 10);
-              const audioUrl = `https://invidious.nerdvpn.de/latest_version?id=${videoId}&itag=140`;
+              const audioUrl = `https://inv.tux.pizza/latest_version?id=${videoId}&itag=140`;
 
               return {
                 id: `yt_${videoId}`,
@@ -275,20 +291,22 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
   try {
     const results = await Promise.allSettled([
       fetchYouTube(),
-      fetchiTunes(),
       fetchSaavn(),
       fetchAudius(),
       fetchJamendo(),
+      fetchiTunes(),
     ]);
 
     const youtubeTracks = results[0].status === 'fulfilled' ? results[0].value : [];
-    const itunesTracks = results[1].status === 'fulfilled' ? results[1].value : [];
-    const saavnTracks = results[2].status === 'fulfilled' ? results[2].value : [];
-    const audiusTracks = results[3].status === 'fulfilled' ? results[3].value : [];
-    const jamendoTracks = results[4].status === 'fulfilled' ? results[4].value : [];
+    const saavnTracks = results[1].status === 'fulfilled' ? results[1].value : [];
+    const audiusTracks = results[2].status === 'fulfilled' ? results[2].value : [];
+    const jamendoTracks = results[3].status === 'fulfilled' ? results[3].value : [];
+    const itunesTracks = results[4].status === 'fulfilled' ? results[4].value : [];
 
-    // Prioritize YouTube -> iTunes Apple Music -> Saavn -> Audius/Jamendo indie tracks last
-    const combined = [...youtubeTracks, ...itunesTracks, ...saavnTracks, ...audiusTracks, ...jamendoTracks];
+    // Prioritize FULL-LENGTH songs from YouTube, JioSaavn, Audius, and Jamendo.
+    // Exclude iTunes 30-second clips so the user always gets full-length music!
+    const allFullTracks = [...youtubeTracks, ...saavnTracks, ...audiusTracks, ...jamendoTracks].filter((t) => t.duration > 60);
+    const combined = allFullTracks.length > 0 ? allFullTracks : [...itunesTracks, ...allFullTracks];
     const uniqueSongs = [];
     const seenIds = new Set();
     for (const song of combined) {
