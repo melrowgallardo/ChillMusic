@@ -110,15 +110,97 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
+  const fetchSaavn = async () => {
+    const urls = [
+      `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
+      `https://saavn.me/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
+      `https://jiosaavn-api-privatecv-101.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
+    ];
+
+    for (const url of urls) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const json = await res.json();
+          const results = json.data?.results || (Array.isArray(json.data) ? json.data : []) || [];
+          const tracks = results.map((item) => {
+            const imgList = item.image || item.images || [];
+            let coverUrl = '';
+            if (Array.isArray(imgList) && imgList.length > 0) {
+              const lastImg = imgList[imgList.length - 1];
+              coverUrl = typeof lastImg === 'object' ? (lastImg.url || lastImg.link || '') : typeof lastImg === 'string' ? lastImg : '';
+            } else if (typeof imgList === 'string') {
+              coverUrl = imgList;
+            }
+            if (!coverUrl) {
+              coverUrl = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+            }
+
+            const audioList = item.downloadUrl || item.url || item.media_preview_url || [];
+            let audioUrl = '';
+            if (Array.isArray(audioList) && audioList.length > 0) {
+              const lastAudio = audioList[audioList.length - 1];
+              audioUrl = typeof lastAudio === 'object' ? (lastAudio.url || lastAudio.link || '') : typeof lastAudio === 'string' ? lastAudio : '';
+            } else if (typeof audioList === 'string') {
+              audioUrl = audioList;
+            }
+
+            let artistName = 'Unknown Artist';
+            if (item.artists && Array.isArray(item.artists.primary) && item.artists.primary.length > 0) {
+              artistName = item.artists.primary.map((a) => a.name).join(', ');
+            } else if (item.primaryArtists) {
+              artistName = item.primaryArtists;
+            } else if (item.artist) {
+              artistName = item.artist;
+            }
+
+            let albumTitle = 'Single';
+            if (item.album && typeof item.album === 'object') {
+              albumTitle = item.album.name || item.album.title || 'Single';
+            } else if (typeof item.album === 'string') {
+              albumTitle = item.album;
+            }
+
+            const dur = parseInt(item.duration || 210, 10);
+
+            return {
+              id: String(item.id || Math.random()),
+              title: item.name || item.title || 'Unknown Title',
+              artist: artistName,
+              artist_name: artistName,
+              album: albumTitle,
+              album_title: albumTitle,
+              duration: dur,
+              image_url: coverUrl,
+              cover_url: coverUrl,
+              image: coverUrl,
+              artwork: coverUrl,
+              audio_url: audioUrl,
+              source: 'saavn',
+            };
+          }).filter((t) => t.audio_url);
+
+          if (tracks.length > 0) {
+            return tracks;
+          }
+        }
+      } catch (err) {
+        console.warn(`Saavn mirror fetch failed for ${url}:`, err);
+      }
+    }
+    return [];
+  };
+
   try {
-    const [jamendoTracks, audiusTracks, itunesTracks] = await Promise.all([
+    const [saavnTracks, jamendoTracks, audiusTracks, itunesTracks] = await Promise.all([
+      fetchSaavn(),
       fetchJamendo(),
       fetchAudius(),
       fetchiTunes(),
     ]);
 
-    // Put full-length songs (Jamendo & Audius) first, then iTunes previews
-    const combined = [...jamendoTracks, ...audiusTracks, ...itunesTracks];
+    // Put full-length mainstream music (Saavn) first, then Jamendo & Audius full songs, then iTunes previews
+    const combined = [...saavnTracks, ...jamendoTracks, ...audiusTracks, ...itunesTracks];
     const uniqueSongs = [];
     const seenIds = new Set();
     for (const song of combined) {
