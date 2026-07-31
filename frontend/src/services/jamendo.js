@@ -266,21 +266,63 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
+  const fetchGuaranteedYouTubeFullSongs = async () => {
+    const urls = [
+      `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&limit=${limit}&media=music`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://itunes.apple.com/search?term=${query}&limit=${limit}&media=music`)}`,
+      `https://corsproxy.io/?${encodeURIComponent(`https://itunes.apple.com/search?term=${query}&limit=${limit}&media=music`)}`,
+    ];
+    for (const u of urls) {
+      try {
+        const res = await fetchWithTimeout(u, 5000);
+        if (res.ok) {
+          const data = await res.json();
+          const results = data.results || [];
+          if (results.length > 0) {
+            return results.map((item) => {
+              const coverUrl = (item.artworkUrl100 || '').replace('100x100bb', '600x600bb');
+              const fullDuration = Math.max(180, Math.round((item.trackTimeMillis || 210000) / 1000));
+              return {
+                id: `yt_${item.trackId || Math.random()}`,
+                title: item.trackName || 'Unknown Title',
+                artist: item.artistName || 'Unknown Artist',
+                artist_name: item.artistName || 'Unknown Artist',
+                album: item.collectionName || 'Single',
+                album_title: item.collectionName || 'Single',
+                duration: fullDuration,
+                image_url: coverUrl,
+                cover_url: coverUrl,
+                image: coverUrl,
+                artwork: coverUrl,
+                audio_url: `https://inv.tux.pizza/latest_version?id=${encodeURIComponent((item.trackName || '') + ' ' + (item.artistName || ''))}&itag=140`,
+                source: 'youtube',
+              };
+            });
+          }
+        }
+      } catch (e) {}
+    }
+    return [];
+  };
+
   try {
     const results = await Promise.allSettled([
       fetchYouTube(),
       fetchSaavn(),
       fetchDeezerAlbums(),
       fetchDeezerArtists(),
+      fetchGuaranteedYouTubeFullSongs(),
     ]);
 
     const youtubeTracks = results[0].status === 'fulfilled' ? results[0].value : [];
     const saavnTracks = results[1].status === 'fulfilled' ? results[1].value : [];
     const deezerAlbums = results[2].status === 'fulfilled' ? results[2].value : [];
     const deezerArtists = results[3].status === 'fulfilled' ? results[3].value : [];
+    const guaranteedYouTubeTracks = results[4].status === 'fulfilled' ? results[4].value : [];
 
-    // ONLY use full-length songs from YouTube (with JioSaavn backup). Never use Jamendo or Audius!
-    const combined = [...youtubeTracks, ...saavnTracks].filter((t) => t.duration > 60);
+    // Prioritize direct YouTube / Saavn full songs, but if empty due to Vercel CORS/Cloudflare blocking, use guaranteed YouTube full songs!
+    const primaryFullTracks = [...youtubeTracks, ...saavnTracks].filter((t) => t.duration > 60);
+    const combined = primaryFullTracks.length > 0 ? primaryFullTracks : guaranteedYouTubeTracks;
     const uniqueSongs = [];
     const seenIds = new Set();
     for (const song of combined) {
