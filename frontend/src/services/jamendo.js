@@ -1,5 +1,17 @@
 import api from './api';
 
+// Helper to prevent browser fetch calls from hanging indefinitely
+const fetchWithTimeout = async (url, timeoutMs = 3000) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 // Resilient public music search fallback (Jamendo + Audius full songs + iTunes with CORS proxy support)
 const fallbackUnifiedSearch = async (query, limit = 20) => {
   const fetchiTunes = async () => {
@@ -25,24 +37,24 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
       });
 
     try {
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url, 3000);
       if (res.ok) {
         const data = await res.json();
         return parseResults(data.results);
       }
     } catch (err) {
-      console.warn('Direct iTunes fetch CORS blocked, attempting CORS proxy...');
+      console.warn('Direct iTunes fetch failed or blocked, trying CORS proxy...');
     }
 
     try {
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxyUrl);
+      const res = await fetchWithTimeout(proxyUrl, 3000);
       if (res.ok) {
         const data = await res.json();
         return parseResults(data.results);
       }
     } catch (proxyErr) {
-      console.error('iTunes CORS proxy fallback failed:', proxyErr);
+      console.warn('iTunes CORS proxy fallback failed:', proxyErr);
     }
     return [];
   };
@@ -51,7 +63,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     const clientId = import.meta.env.VITE_JAMENDO_CLIENT_ID || 'aee77fe5';
     try {
       const url = `https://api.jamendo.com/v3.0/tracks/?client_id=${clientId}&format=jsonpretty&limit=${limit}&search=${encodeURIComponent(query)}&include=musicinfo`;
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url, 3000);
       if (res.ok) {
         const data = await res.json();
         return (data.results || []).map((item) => {
@@ -74,7 +86,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
         });
       }
     } catch (err) {
-      console.warn('Jamendo direct fetch failed:', err);
+      console.warn('Jamendo fetch failed or timed out:', err);
     }
     return [];
   };
@@ -82,7 +94,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
   const fetchAudius = async () => {
     try {
       const url = `https://discoveryprovider.audius.co/v1/tracks/search?query=${encodeURIComponent(query)}&limit=${limit}&app_name=chillmusic`;
-      const res = await fetch(url);
+      const res = await fetchWithTimeout(url, 3000);
       if (res.ok) {
         const data = await res.json();
         return (data.data || []).map((item) => {
@@ -105,99 +117,104 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
         });
       }
     } catch (err) {
-      console.warn('Audius direct fetch failed:', err);
+      console.warn('Audius fetch failed or timed out:', err);
     }
     return [];
   };
 
   const fetchSaavn = async () => {
     const urls = [
-      `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
       `https://saavn.me/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
+      `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
       `https://jiosaavn-api-privatecv-101.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
     ];
 
-    for (const url of urls) {
-      try {
-        const res = await fetch(url);
-        if (res.ok) {
-          const json = await res.json();
-          const results = json.data?.results || (Array.isArray(json.data) ? json.data : []) || [];
-          const tracks = results.map((item) => {
-            const imgList = item.image || item.images || [];
-            let coverUrl = '';
-            if (Array.isArray(imgList) && imgList.length > 0) {
-              const lastImg = imgList[imgList.length - 1];
-              coverUrl = typeof lastImg === 'object' ? (lastImg.url || lastImg.link || '') : typeof lastImg === 'string' ? lastImg : '';
-            } else if (typeof imgList === 'string') {
-              coverUrl = imgList;
-            }
-            if (!coverUrl) {
-              coverUrl = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
-            }
-
-            const audioList = item.downloadUrl || item.url || item.media_preview_url || [];
-            let audioUrl = '';
-            if (Array.isArray(audioList) && audioList.length > 0) {
-              const lastAudio = audioList[audioList.length - 1];
-              audioUrl = typeof lastAudio === 'object' ? (lastAudio.url || lastAudio.link || '') : typeof lastAudio === 'string' ? lastAudio : '';
-            } else if (typeof audioList === 'string') {
-              audioUrl = audioList;
-            }
-
-            let artistName = 'Unknown Artist';
-            if (item.artists && Array.isArray(item.artists.primary) && item.artists.primary.length > 0) {
-              artistName = item.artists.primary.map((a) => a.name).join(', ');
-            } else if (item.primaryArtists) {
-              artistName = item.primaryArtists;
-            } else if (item.artist) {
-              artistName = item.artist;
-            }
-
-            let albumTitle = 'Single';
-            if (item.album && typeof item.album === 'object') {
-              albumTitle = item.album.name || item.album.title || 'Single';
-            } else if (typeof item.album === 'string') {
-              albumTitle = item.album;
-            }
-
-            const dur = parseInt(item.duration || 210, 10);
-
-            return {
-              id: String(item.id || Math.random()),
-              title: item.name || item.title || 'Unknown Title',
-              artist: artistName,
-              artist_name: artistName,
-              album: albumTitle,
-              album_title: albumTitle,
-              duration: dur,
-              image_url: coverUrl,
-              cover_url: coverUrl,
-              image: coverUrl,
-              artwork: coverUrl,
-              audio_url: audioUrl,
-              source: 'saavn',
-            };
-          }).filter((t) => t.audio_url);
-
-          if (tracks.length > 0) {
-            return tracks;
-          }
+    const promises = urls.map(async (url) => {
+      const res = await fetchWithTimeout(url, 3000);
+      if (!res.ok) throw new Error('Not OK');
+      const json = await res.json();
+      const results = json.data?.results || (Array.isArray(json.data) ? json.data : []) || [];
+      const tracks = results.map((item) => {
+        const imgList = item.image || item.images || [];
+        let coverUrl = '';
+        if (Array.isArray(imgList) && imgList.length > 0) {
+          const lastImg = imgList[imgList.length - 1];
+          coverUrl = typeof lastImg === 'object' ? (lastImg.url || lastImg.link || '') : typeof lastImg === 'string' ? lastImg : '';
+        } else if (typeof imgList === 'string') {
+          coverUrl = imgList;
         }
-      } catch (err) {
-        console.warn(`Saavn mirror fetch failed for ${url}:`, err);
-      }
+        if (!coverUrl) {
+          coverUrl = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+        }
+
+        const audioList = item.downloadUrl || item.url || item.media_preview_url || [];
+        let audioUrl = '';
+        if (Array.isArray(audioList) && audioList.length > 0) {
+          const lastAudio = audioList[audioList.length - 1];
+          audioUrl = typeof lastAudio === 'object' ? (lastAudio.url || lastAudio.link || '') : typeof lastAudio === 'string' ? lastAudio : '';
+        } else if (typeof audioList === 'string') {
+          audioUrl = audioList;
+        }
+
+        let artistName = 'Unknown Artist';
+        if (item.artists && Array.isArray(item.artists.primary) && item.artists.primary.length > 0) {
+          artistName = item.artists.primary.map((a) => a.name).join(', ');
+        } else if (item.primaryArtists) {
+          artistName = item.primaryArtists;
+        } else if (item.artist) {
+          artistName = item.artist;
+        }
+
+        let albumTitle = 'Single';
+        if (item.album && typeof item.album === 'object') {
+          albumTitle = item.album.name || item.album.title || 'Single';
+        } else if (typeof item.album === 'string') {
+          albumTitle = item.album;
+        }
+
+        const dur = parseInt(item.duration || 210, 10);
+
+        return {
+          id: String(item.id || Math.random()),
+          title: item.name || item.title || 'Unknown Title',
+          artist: artistName,
+          artist_name: artistName,
+          album: albumTitle,
+          album_title: albumTitle,
+          duration: dur,
+          image_url: coverUrl,
+          cover_url: coverUrl,
+          image: coverUrl,
+          artwork: coverUrl,
+          audio_url: audioUrl,
+          source: 'saavn',
+        };
+      }).filter((t) => t.audio_url);
+
+      if (tracks.length === 0) throw new Error('No tracks');
+      return tracks;
+    });
+
+    try {
+      return await Promise.any(promises);
+    } catch (err) {
+      console.warn('All Saavn mirrors timed out or failed for query:', query);
+      return [];
     }
-    return [];
   };
 
   try {
-    const [saavnTracks, jamendoTracks, audiusTracks, itunesTracks] = await Promise.all([
+    const results = await Promise.allSettled([
       fetchSaavn(),
       fetchJamendo(),
       fetchAudius(),
       fetchiTunes(),
     ]);
+
+    const saavnTracks = results[0].status === 'fulfilled' ? results[0].value : [];
+    const jamendoTracks = results[1].status === 'fulfilled' ? results[1].value : [];
+    const audiusTracks = results[2].status === 'fulfilled' ? results[2].value : [];
+    const itunesTracks = results[3].status === 'fulfilled' ? results[3].value : [];
 
     // Put full-length mainstream music (Saavn) first, then Jamendo & Audius full songs, then iTunes previews
     const combined = [...saavnTracks, ...jamendoTracks, ...audiusTracks, ...itunesTracks];
