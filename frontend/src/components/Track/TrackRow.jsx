@@ -162,7 +162,7 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist }) => {
 
         <Box
           component="img"
-          src={track.image_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80'}
+          src={track.image_url || track.cover_url || track.image || track.artwork || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80'}
           alt={track.title}
           sx={{ width: 42, height: 42, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }}
         />

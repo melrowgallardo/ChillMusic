@@ -218,7 +218,7 @@ const FullPlayerModal = () => {
       >
         {viewMode === 'cover' ? (
           <Avatar
-            src={currentTrack.image_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80'}
+            src={currentTrack.image_url || currentTrack.cover_url || currentTrack.image || currentTrack.artwork || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80'}
             variant="rounded"
             sx={{
               width: { xs: 260, sm: 320 },

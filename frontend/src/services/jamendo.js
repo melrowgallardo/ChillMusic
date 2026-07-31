@@ -1,22 +1,28 @@
 import api from './api';
 
-// Resilient public music search fallback (iTunes + Jamendo with CORS proxy support for Vercel production)
+// Resilient public music search fallback (Jamendo + Audius full songs + iTunes with CORS proxy support)
 const fallbackUnifiedSearch = async (query, limit = 20) => {
   const fetchiTunes = async () => {
     const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&limit=${limit}&media=music`;
     const parseResults = (results) =>
-      (results || []).map((item) => ({
-        id: String(item.trackId || Math.random()),
-        title: item.trackName || 'Unknown Title',
-        artist: item.artistName || 'Unknown Artist',
-        artist_name: item.artistName || 'Unknown Artist',
-        album: item.collectionName || 'Single',
-        album_title: item.collectionName || 'Single',
-        duration: Math.round((item.trackTimeMillis || 180000) / 1000),
-        cover_url: (item.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
-        audio_url: item.previewUrl || '',
-        source: 'itunes',
-      }));
+      (results || []).map((item) => {
+        const coverUrl = (item.artworkUrl100 || '').replace('100x100bb', '600x600bb');
+        return {
+          id: String(item.trackId || Math.random()),
+          title: item.trackName || 'Unknown Title',
+          artist: item.artistName || 'Unknown Artist',
+          artist_name: item.artistName || 'Unknown Artist',
+          album: item.collectionName || 'Single',
+          album_title: item.collectionName || 'Single',
+          duration: Math.round((item.trackTimeMillis || 180000) / 1000),
+          image_url: coverUrl,
+          cover_url: coverUrl,
+          image: coverUrl,
+          artwork: coverUrl,
+          audio_url: item.previewUrl || '',
+          source: 'itunes',
+        };
+      });
 
     try {
       const res = await fetch(url);
@@ -48,18 +54,24 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        return (data.results || []).map((item) => ({
-          id: String(item.id),
-          title: item.name || 'Unknown Title',
-          artist: item.artist_name || 'Unknown Artist',
-          artist_name: item.artist_name || 'Unknown Artist',
-          album: item.album_name || 'Single',
-          album_title: item.album_name || 'Single',
-          duration: parseInt(item.duration || 180, 10),
-          cover_url: item.image || '',
-          audio_url: item.audio || '',
-          source: 'jamendo',
-        }));
+        return (data.results || []).map((item) => {
+          const coverUrl = item.image || '';
+          return {
+            id: String(item.id),
+            title: item.name || 'Unknown Title',
+            artist: item.artist_name || 'Unknown Artist',
+            artist_name: item.artist_name || 'Unknown Artist',
+            album: item.album_name || 'Single',
+            album_title: item.album_name || 'Single',
+            duration: parseInt(item.duration || 180, 10),
+            image_url: coverUrl,
+            cover_url: coverUrl,
+            image: coverUrl,
+            artwork: coverUrl,
+            audio_url: item.audio || '',
+            source: 'jamendo',
+          };
+        });
       }
     } catch (err) {
       console.warn('Jamendo direct fetch failed:', err);
@@ -67,13 +79,46 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
+  const fetchAudius = async () => {
+    try {
+      const url = `https://discoveryprovider.audius.co/v1/tracks/search?query=${encodeURIComponent(query)}&limit=${limit}&app_name=chillmusic`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        return (data.data || []).map((item) => {
+          const coverUrl = item.artwork?.['1000x1000'] || item.artwork?.['480x480'] || item.artwork?.['150x150'] || '';
+          return {
+            id: String(item.id),
+            title: item.title || 'Unknown Title',
+            artist: item.user?.name || 'Unknown Artist',
+            artist_name: item.user?.name || 'Unknown Artist',
+            album: item.title || 'Single',
+            album_title: item.title || 'Single',
+            duration: parseInt(item.duration || 180, 10),
+            image_url: coverUrl,
+            cover_url: coverUrl,
+            image: coverUrl,
+            artwork: coverUrl,
+            audio_url: `https://discoveryprovider.audius.co/v1/tracks/${item.id}/stream?app_name=chillmusic`,
+            source: 'audius',
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('Audius direct fetch failed:', err);
+    }
+    return [];
+  };
+
   try {
-    const [itunesTracks, jamendoTracks] = await Promise.all([
-      fetchiTunes(),
+    const [jamendoTracks, audiusTracks, itunesTracks] = await Promise.all([
       fetchJamendo(),
+      fetchAudius(),
+      fetchiTunes(),
     ]);
 
-    const combined = [...itunesTracks, ...jamendoTracks];
+    // Put full-length songs (Jamendo & Audius) first, then iTunes previews
+    const combined = [...jamendoTracks, ...audiusTracks, ...itunesTracks];
     const uniqueSongs = [];
     const seenIds = new Set();
     for (const song of combined) {
@@ -90,7 +135,9 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
         artistsMap.set(t.artist, {
           id: t.artist,
           name: t.artist,
-          image: t.cover_url,
+          image_url: t.image_url,
+          cover_url: t.image_url,
+          image: t.image_url,
           source: t.source,
         });
       }
@@ -99,7 +146,9 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
           id: t.album,
           title: t.album,
           artist: t.artist,
-          cover_url: t.cover_url,
+          image_url: t.image_url,
+          cover_url: t.image_url,
+          image: t.image_url,
           source: t.source,
         });
       }
