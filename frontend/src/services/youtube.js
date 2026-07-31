@@ -1,7 +1,7 @@
 import api from './api';
 import { searchUnified } from './jamendo';
 
-const fetchWithTimeout = async (url, timeoutMs = 3000) => {
+const fetchWithTimeout = async (url, timeoutMs = 8000) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -10,6 +10,46 @@ const fetchWithTimeout = async (url, timeoutMs = 3000) => {
   } finally {
     clearTimeout(timer);
   }
+};
+
+const fetchProxyJson = async (url, timeoutMs = 8000) => {
+  // 1. Try Codetabs CORS proxy (bypasses browser CORS cleanly)
+  try {
+    const res = await fetchWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, timeoutMs);
+    if (res.ok) {
+      const json = await res.json();
+      if (json) return json;
+    }
+  } catch (e1) {}
+
+  // 2. Try AllOrigins GET proxy
+  try {
+    const res = await fetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, timeoutMs);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.contents) {
+        return typeof data.contents === 'string' ? JSON.parse(data.contents) : data.contents;
+      }
+    }
+  } catch (e2) {}
+
+  // 3. Try Direct fetch
+  try {
+    const res = await fetchWithTimeout(url, timeoutMs);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e3) {}
+
+  // 4. Try CorsProxy.io
+  try {
+    const res = await fetchWithTimeout(`https://corsproxy.io/?${encodeURIComponent(url)}`, timeoutMs);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e4) {}
+
+  return null;
 };
 
 export const fetchYouTubePublic = async (query, limit = 20) => {
@@ -23,17 +63,10 @@ export const fetchYouTubePublic = async (query, limit = 20) => {
     `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(query)}`,
   ];
 
-  const mirrors = [
-    ...directMirrors,
-    ...directMirrors.slice(0, 3).map((url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`),
-    ...directMirrors.slice(0, 3).map((url) => `https://corsproxy.io/?${encodeURIComponent(url)}`),
-  ];
-
-  for (const url of mirrors) {
+  for (const url of directMirrors) {
     try {
-      const res = await fetchWithTimeout(url, 3500);
-      if (res.ok) {
-        const json = await res.json();
+      const json = await fetchProxyJson(url, 7500);
+      if (json) {
         const items = json.items || (Array.isArray(json) ? json : []) || [];
         const tracks = items
           .slice(0, limit)
@@ -77,7 +110,7 @@ export const fetchYouTubePublic = async (query, limit = 20) => {
               source: 'youtube',
             };
           })
-          .filter(Boolean);
+          .filter((t) => t && t.duration >= 60);
 
         if (tracks.length > 0) {
           return tracks;
@@ -88,39 +121,84 @@ export const fetchYouTubePublic = async (query, limit = 20) => {
     }
   }
 
-  // Guaranteed fallback: Apple Music CORS-friendly API transformed into official full-length YouTube songs
-  const fallbackUrls = [
-    `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&limit=${limit}&media=music`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://itunes.apple.com/search?term=${query}&limit=${limit}&media=music`)}`,
-    `https://corsproxy.io/?${encodeURIComponent(`https://itunes.apple.com/search?term=${query}&limit=${limit}&media=music`)}`,
+  // Guaranteed full-length song fallback: JioSaavn CDN Full-Length Studio Songs (Never 30s previews)
+  const saavnUrls = [
+    `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
+    `https://jiosaavn-api-v2.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
+    `https://saavn.me/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
   ];
-  for (const u of fallbackUrls) {
+
+  for (const url of saavnUrls) {
     try {
-      const res = await fetchWithTimeout(u, 5000);
-      if (res.ok) {
-        const data = await res.json();
-        const results = data.results || [];
-        if (results.length > 0) {
-          return results.map((item) => {
-            const coverUrl = (item.artworkUrl100 || '').replace('100x100bb', '600x600bb');
-            const fullDuration = Math.max(180, Math.round((item.trackTimeMillis || 210000) / 1000));
+      const json = await fetchProxyJson(url, 8000);
+      if (json) {
+        const results = json.data?.results || (Array.isArray(json.data) ? json.data : []) || [];
+        const tracks = results
+          .map((item) => {
+            const imgList = item.image || item.images || [];
+            let coverUrl = '';
+            if (Array.isArray(imgList) && imgList.length > 0) {
+              const lastImg = imgList[imgList.length - 1];
+              coverUrl = typeof lastImg === 'object' ? (lastImg.url || lastImg.link || '') : typeof lastImg === 'string' ? lastImg : '';
+            } else if (typeof imgList === 'string') {
+              coverUrl = imgList;
+            }
+            if (!coverUrl) {
+              coverUrl = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+            }
+
+            let audioUrl = '';
+            const audioList = item.downloadUrl || item.url || item.media_preview_url || [];
+            if (Array.isArray(audioList) && audioList.length > 0) {
+              for (let i = audioList.length - 1; i >= 0; i--) {
+                const entry = audioList[i];
+                const u = typeof entry === 'object' ? (entry.url || entry.link || '') : typeof entry === 'string' ? entry : '';
+                if (u && u.startsWith('http') && !u.includes('jiosaavn.com/song')) {
+                  audioUrl = u;
+                  break;
+                }
+              }
+            } else if (typeof audioList === 'string' && !audioList.includes('jiosaavn.com/song')) {
+              audioUrl = audioList;
+            }
+
+            let artistName = 'Unknown Artist';
+            if (item.artists && Array.isArray(item.artists.primary) && item.artists.primary.length > 0) {
+              artistName = item.artists.primary.map((a) => a.name).join(', ');
+            } else if (item.primaryArtists) {
+              artistName = item.primaryArtists;
+            } else if (item.artist) {
+              artistName = item.artist;
+            }
+
+            let albumTitle = 'Single';
+            if (item.album && typeof item.album === 'object') {
+              albumTitle = item.album.name || item.album.title || 'Single';
+            } else if (typeof item.album === 'string') {
+              albumTitle = item.album;
+            }
+
+            const dur = parseInt(item.duration || 210, 10);
+
             return {
-              id: `yt_${item.trackId || Math.random()}`,
-              title: item.trackName || 'Unknown Title',
-              artist: item.artistName || 'Unknown Artist',
-              artist_name: item.artistName || 'Unknown Artist',
-              album: item.collectionName || 'Single',
-              album_title: item.collectionName || 'Single',
-              duration: fullDuration,
+              id: `saavn_${item.id || Math.random()}`,
+              title: item.name || item.title || 'Unknown Title',
+              artist: artistName,
+              artist_name: artistName,
+              album: albumTitle,
+              album_title: albumTitle,
+              duration: dur,
               image_url: coverUrl,
               cover_url: coverUrl,
               image: coverUrl,
               artwork: coverUrl,
-              audio_url: item.previewUrl || '',
-              source: 'youtube',
+              audio_url: audioUrl,
+              source: 'saavn',
             };
-          });
-        }
+          })
+          .filter((t) => t && t.audio_url && t.duration >= 60);
+
+        if (tracks.length > 0) return tracks;
       }
     } catch (e) {}
   }

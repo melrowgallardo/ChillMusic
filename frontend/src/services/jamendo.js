@@ -1,7 +1,7 @@
 import api from './api';
 
 // Helper to prevent browser fetch calls from hanging indefinitely
-const fetchWithTimeout = async (url, timeoutMs = 3000) => {
+const fetchWithTimeout = async (url, timeoutMs = 8000) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -10,6 +10,46 @@ const fetchWithTimeout = async (url, timeoutMs = 3000) => {
   } finally {
     clearTimeout(timer);
   }
+};
+
+const fetchProxyJson = async (url, timeoutMs = 8000) => {
+  // 1. Try Codetabs CORS proxy (bypasses browser CORS cleanly)
+  try {
+    const res = await fetchWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, timeoutMs);
+    if (res.ok) {
+      const json = await res.json();
+      if (json) return json;
+    }
+  } catch (e1) {}
+
+  // 2. Try AllOrigins GET proxy
+  try {
+    const res = await fetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, timeoutMs);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.contents) {
+        return typeof data.contents === 'string' ? JSON.parse(data.contents) : data.contents;
+      }
+    }
+  } catch (e2) {}
+
+  // 3. Try Direct fetch
+  try {
+    const res = await fetchWithTimeout(url, timeoutMs);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e3) {}
+
+  // 4. Try CorsProxy.io
+  try {
+    const res = await fetchWithTimeout(`https://corsproxy.io/?${encodeURIComponent(url)}`, timeoutMs);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e4) {}
+
+  return null;
 };
 
 // Resilient public music search fallback (YouTube full songs + Deezer Albums & Artists)
@@ -101,17 +141,11 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
       `https://jiosaavn-api-sam.vercel.app/search/songs?query=${encodeURIComponent(query)}`,
       `https://saavn.me/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`,
     ];
-    const urls = [
-      ...directUrls,
-      ...directUrls.slice(0, 3).map((u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`),
-      ...directUrls.slice(0, 3).map((u) => `https://corsproxy.io/?${encodeURIComponent(u)}`),
-    ];
 
-    for (const url of urls) {
+    for (const url of directUrls) {
       try {
-        const res = await fetchWithTimeout(url, 7500);
-        if (res.ok) {
-          const json = await res.json();
+        const json = await fetchProxyJson(url, 8000);
+        if (json) {
           const results = json.data?.results || (Array.isArray(json.data) ? json.data : []) || [];
           const tracks = results
             .map((item) => {
@@ -133,15 +167,10 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
                 for (let i = audioList.length - 1; i >= 0; i--) {
                   const entry = audioList[i];
                   const u = typeof entry === 'object' ? (entry.url || entry.link || '') : typeof entry === 'string' ? entry : '';
-                  if (u && (u.includes('.mp3') || u.includes('.m4a') || u.includes('.aac') || u.includes('saavncdn') || u.includes('cdn'))) {
+                  if (u && u.startsWith('http') && !u.includes('jiosaavn.com/song')) {
                     audioUrl = u;
                     break;
                   }
-                }
-                if (!audioUrl) {
-                  const last = audioList[audioList.length - 1];
-                  const u = typeof last === 'object' ? (last.url || last.link || '') : typeof last === 'string' ? last : '';
-                  if (u && !u.includes('jiosaavn.com/song')) audioUrl = u;
                 }
               } else if (typeof audioList === 'string' && !audioList.includes('jiosaavn.com/song')) {
                 audioUrl = audioList;
@@ -181,7 +210,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
                 source: 'saavn',
               };
             })
-            .filter((t) => t.audio_url);
+            .filter((t) => t.audio_url && t.duration >= 60);
 
           if (tracks.length > 0) return tracks;
         }
@@ -201,17 +230,10 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
       `https://invidious.nerdvpn.de/api/v1/search?q=${encodeURIComponent(query)}`,
     ];
 
-    const mirrors = [
-      ...directMirrors,
-      ...directMirrors.slice(0, 3).map((url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`),
-      ...directMirrors.slice(0, 3).map((url) => `https://corsproxy.io/?${encodeURIComponent(url)}`),
-    ];
-
-    for (const url of mirrors) {
+    for (const url of directMirrors) {
       try {
-        const res = await fetchWithTimeout(url, 3500);
-        if (res.ok) {
-          const json = await res.json();
+        const json = await fetchProxyJson(url, 7500);
+        if (json) {
           const items = json.items || (Array.isArray(json) ? json : []) || [];
           const tracks = items
             .slice(0, limit)
@@ -255,7 +277,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
                 source: 'youtube',
               };
             })
-            .filter(Boolean);
+            .filter((t) => t && t.duration >= 60);
 
           if (tracks.length > 0) {
             return tracks;
@@ -268,42 +290,69 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
-  const fetchGuaranteedYouTubeFullSongs = async () => {
-    const urls = [
-      `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&limit=${limit}&media=music`,
-      `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://itunes.apple.com/search?term=${query}&limit=${limit}&media=music`)}`,
-      `https://corsproxy.io/?${encodeURIComponent(`https://itunes.apple.com/search?term=${query}&limit=${limit}&media=music`)}`,
-    ];
-    for (const u of urls) {
-      try {
-        const res = await fetchWithTimeout(u, 5000);
-        if (res.ok) {
-          const data = await res.json();
-          const results = data.results || [];
-          if (results.length > 0) {
-            return results.map((item) => {
-              const coverUrl = (item.artworkUrl100 || '').replace('100x100bb', '600x600bb');
-              const fullDuration = Math.max(180, Math.round((item.trackTimeMillis || 210000) / 1000));
-              return {
-                id: `yt_${item.trackId || Math.random()}`,
-                title: item.trackName || 'Unknown Title',
-                artist: item.artistName || 'Unknown Artist',
-                artist_name: item.artistName || 'Unknown Artist',
-                album: item.collectionName || 'Single',
-                album_title: item.collectionName || 'Single',
-                duration: fullDuration,
-                image_url: coverUrl,
-                cover_url: coverUrl,
-                image: coverUrl,
-                artwork: coverUrl,
-                audio_url: item.previewUrl || '',
-                source: 'youtube',
-              };
-            });
+  // Guaranteed Full-Length Studio Songs (Audius Open Music API + JioSaavn Proxy - NEVER 30 seconds!)
+  const fetchGuaranteedFullSongs = async () => {
+    try {
+      const audiusUrl = `https://api.audius.co/v1/tracks/search?query=${encodeURIComponent(query)}&limit=${limit}`;
+      const res = await fetchWithTimeout(audiusUrl, 6000);
+      if (res.ok) {
+        const json = await res.json();
+        const items = json.data || [];
+        const valid = items
+          .filter((i) => i.duration >= 60)
+          .map((item) => {
+            const coverUrl = item.artwork?.['480x480'] || item.artwork?.['1000x1000'] || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+            return {
+              id: `au_${item.id}`,
+              title: item.title || 'Unknown Title',
+              artist: item.user?.name || 'Unknown Artist',
+              artist_name: item.user?.name || 'Unknown Artist',
+              album: 'Audius Music',
+              album_title: 'Audius Music',
+              duration: item.duration || 210,
+              image_url: coverUrl,
+              cover_url: coverUrl,
+              image: coverUrl,
+              artwork: coverUrl,
+              audio_url: `https://api.audius.co/v1/tracks/${item.id}/stream`,
+              source: 'audius',
+            };
+          });
+        if (valid.length > 0) return valid;
+      }
+    } catch (e) {}
+
+    // Fallback to proxying JioSaavn CDN studio songs
+    const saavnFallback = `https://saavn.dev/api/search/songs?query=${encodeURIComponent(query)}&limit=${limit}`;
+    try {
+      const json = await fetchProxyJson(saavnFallback, 8000);
+      if (json && json.data?.results) {
+        const tracks = (json.data.results || []).map((item) => {
+          let audioUrl = '';
+          const audioList = item.downloadUrl || item.url || [];
+          if (Array.isArray(audioList) && audioList.length > 0) {
+            audioUrl = (audioList[audioList.length - 1].url || audioList[audioList.length - 1].link || '');
           }
-        }
-      } catch (e) {}
-    }
+          return {
+            id: `saavn_${item.id}`,
+            title: item.name || item.title || 'Unknown Title',
+            artist: item.primaryArtists || 'Unknown Artist',
+            artist_name: item.primaryArtists || 'Unknown Artist',
+            album: typeof item.album === 'object' ? item.album.name : (item.album || 'Single'),
+            album_title: typeof item.album === 'object' ? item.album.name : (item.album || 'Single'),
+            duration: parseInt(item.duration || 210, 10),
+            image_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+            cover_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+            image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+            artwork: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+            audio_url: audioUrl,
+            source: 'saavn',
+          };
+        }).filter((t) => t.audio_url && t.duration >= 60);
+        if (tracks.length > 0) return tracks;
+      }
+    } catch (e2) {}
+
     return [];
   };
 
@@ -313,22 +362,22 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
       fetchSaavn(),
       fetchDeezerAlbums(),
       fetchDeezerArtists(),
-      fetchGuaranteedYouTubeFullSongs(),
+      fetchGuaranteedFullSongs(),
     ]);
 
     const youtubeTracks = results[0].status === 'fulfilled' ? results[0].value : [];
     const saavnTracks = results[1].status === 'fulfilled' ? results[1].value : [];
     const deezerAlbums = results[2].status === 'fulfilled' ? results[2].value : [];
     const deezerArtists = results[3].status === 'fulfilled' ? results[3].value : [];
-    const guaranteedYouTubeTracks = results[4].status === 'fulfilled' ? results[4].value : [];
+    const guaranteedTracks = results[4].status === 'fulfilled' ? results[4].value : [];
 
-    // Prioritize JioSaavn CDN full songs first, then YouTube, then guaranteed fallback!
-    const primaryFullTracks = [...saavnTracks, ...youtubeTracks].filter((t) => t.duration > 60);
-    const combined = primaryFullTracks.length > 0 ? primaryFullTracks : guaranteedYouTubeTracks;
+    // Prioritize JioSaavn CDN full studio songs first, then YouTube, then guaranteed full songs (NEVER 30s previews)
+    const primaryFullTracks = [...saavnTracks, ...youtubeTracks].filter((t) => t && t.duration >= 60);
+    const combined = primaryFullTracks.length > 0 ? primaryFullTracks : guaranteedTracks;
     const uniqueSongs = [];
     const seenIds = new Set();
     for (const song of combined) {
-      if (!seenIds.has(song.id)) {
+      if (song && !seenIds.has(song.id) && song.duration >= 60) {
         seenIds.add(song.id);
         uniqueSongs.push(song);
       }
