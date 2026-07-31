@@ -1,0 +1,9 @@
+{
+  "appId": "com.chillmusic.app",
+  "appName": "ChillMusic",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}

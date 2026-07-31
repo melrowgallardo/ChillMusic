@@ -1,0 +1,31 @@
+# Node modules and build
+node_modules/
+dist/
+build/
+*.log
+
+# Python cache and venv
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+venv/
+env/
+
+# Environment files
+.env
+.env.local
+*.env
+
+# IDE and OS
+.idea/
+.vscode/
+.gemini/
+*.DS_Store
+Thumbs.db
+
+# Secrets and Keys
+API.txt
+*.key
+*.pem
+secrets.*
