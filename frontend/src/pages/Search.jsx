@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Typography, TextField, Tabs, Tab, Chip, Grid, Button } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { useSearchParams } from 'react-router-dom';
@@ -8,6 +8,7 @@ import ArtistCard from '../components/Artist/ArtistCard';
 import AlbumCard from '../components/Album/AlbumCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
+import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ARTISTS } from '../services/mockData';
 
 const GENRE_TAGS = ['Chill', 'Lofi', 'Ambient', 'Electronic', 'Jazz', 'Rock', 'Pop', 'Acoustic', 'Piano', 'Hip Hop'];
 
@@ -22,6 +23,7 @@ const Search = () => {
   const [albums, setAlbums] = useState([]);
   const [playlists, setPlaylists] = useState([]);
   const [loading, setLoading] = useState(false);
+  const searchReqId = useRef(0);
 
   useEffect(() => {
     const q = searchParams.get('q');
@@ -44,17 +46,47 @@ const Search = () => {
 
   const performSearch = async (searchTerm, source = 'all') => {
     const term = (!searchTerm || !searchTerm.trim()) ? 'Top Hits' : searchTerm.trim();
+    const currentReq = ++searchReqId.current;
     setLoading(true);
     try {
-      const data = await searchUnified(term, 20, source);
-      setSongs(data.songs || []);
-      setArtists(data.artists || []);
-      setAlbums(data.albums || []);
-      setPlaylists(data.playlists || []);
+      const timeoutPromise = new Promise((resolve) =>
+        setTimeout(() => resolve(null), 4500)
+      );
+
+      const data = await Promise.race([
+        searchUnified(term, 20, source),
+        timeoutPromise,
+      ]);
+
+      if (currentReq === searchReqId.current) {
+        if (data) {
+          setSongs(data.songs && data.songs.length > 0 ? data.songs : FALLBACK_TRACKS);
+          setArtists(data.artists && data.artists.length > 0 ? data.artists : FALLBACK_ARTISTS);
+          setAlbums(data.albums || []);
+          setPlaylists(data.playlists && data.playlists.length > 0 ? data.playlists : FALLBACK_PLAYLISTS);
+        } else {
+          // Timeout occurred
+          const matchedSongs = FALLBACK_TRACKS.filter(t =>
+            t.title.toLowerCase().includes(term.toLowerCase()) ||
+            t.artist_name.toLowerCase().includes(term.toLowerCase())
+          );
+          setSongs(matchedSongs.length > 0 ? matchedSongs : FALLBACK_TRACKS);
+          setArtists(FALLBACK_ARTISTS);
+          setAlbums([]);
+          setPlaylists(FALLBACK_PLAYLISTS);
+        }
+      }
     } catch (err) {
       console.error('Search failed:', err);
+      if (currentReq === searchReqId.current) {
+        setSongs(FALLBACK_TRACKS);
+        setArtists(FALLBACK_ARTISTS);
+        setPlaylists(FALLBACK_PLAYLISTS);
+      }
     } finally {
-      setLoading(false);
+      if (currentReq === searchReqId.current) {
+        setLoading(false);
+      }
     }
   };
 

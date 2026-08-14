@@ -3,6 +3,7 @@ import { addHistory } from '../services/firestoreService';
 import { getAutoQueueRecommendations } from '../services/gemini_service';
 import { useAuth } from './AuthContext';
 import { getLocalDownloadById } from '../services/offlineSync';
+import { resolveFullAudioTrack } from '../services/audioResolver';
 
 const PlayerContext = createContext();
 
@@ -93,7 +94,7 @@ export const PlayerProvider = ({ children }) => {
     return `${API_BASE_URL}${cleanUrl}`;
   };
 
-  const playTrack = (track, newQueue = null, index = 0) => {
+  const playTrack = async (track, newQueue = null, index = 0) => {
     if (!track) return;
 
     if (newQueue) {
@@ -110,8 +111,14 @@ export const PlayerProvider = ({ children }) => {
 
     setCurrentTrack(track);
 
+    // Resolve full-length song stream if track is a 30s preview clip
+    const targetTrack = await resolveFullAudioTrack(track);
+    if (targetTrack && targetTrack.audio_url) {
+      setCurrentTrack(targetTrack);
+    }
+
     const audio = audioRef.current;
-    const defaultUrl = getFullAudioUrl(track.audio_url);
+    const defaultUrl = getFullAudioUrl(targetTrack.audio_url);
 
     const startPlay = (urlToPlay) => {
       if (urlToPlay && audio.src !== urlToPlay) {
@@ -120,7 +127,7 @@ export const PlayerProvider = ({ children }) => {
       if (urlToPlay) {
         audio.play().then(() => {
           setIsPlaying(true);
-          recordHistory(track);
+          recordHistory(targetTrack);
         }).catch((err) => {
           console.warn('Auto-play error:', err);
           setIsPlaying(false);
@@ -128,7 +135,7 @@ export const PlayerProvider = ({ children }) => {
       }
     };
 
-    getLocalDownloadById(track.id)
+    getLocalDownloadById(targetTrack.id)
       .then((downloaded) => {
         if (downloaded && downloaded.audioBlob) {
           const blobUrl = URL.createObjectURL(downloaded.audioBlob);
