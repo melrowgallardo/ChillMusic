@@ -86,13 +86,15 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
           .filter((i) => i && i.duration >= 60)
           .map((item) => {
             const coverUrl = item.artwork?.['480x480'] || item.artwork?.['1000x1000'] || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+            const albumName = item.genre ? `${item.genre}` : 'Single';
             return {
               id: `au_${item.id}`,
               title: item.title || 'Unknown Title',
               artist: item.user?.name || 'Unknown Artist',
               artist_name: item.user?.name || 'Unknown Artist',
-              album: 'Audius Music',
-              album_title: 'Audius Music',
+              album: albumName,
+              album_title: albumName,
+              album_name: albumName,
               duration: item.duration || 210,
               image_url: coverUrl,
               cover_url: coverUrl,
@@ -150,6 +152,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
                 artist_name: artistName,
                 album: albumTitle,
                 album_title: albumTitle,
+                album_name: albumTitle,
                 duration: parseInt(item.duration || 210, 10),
                 image_url: coverUrl,
                 cover_url: coverUrl,
@@ -184,6 +187,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
           artist_name: item.artist_name || 'Jamendo Artist',
           album: item.album_name || 'Jamendo Album',
           album_title: item.album_name || 'Jamendo Album',
+          album_name: item.album_name || 'Jamendo Album',
           duration: item.duration || 180,
           image_url: item.album_image || item.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
           cover_url: item.album_image || item.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
@@ -195,7 +199,38 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
-  // 5. Fast iTunes Albums Search (~250ms direct public API)
+  // 5. Fast iTunes Songs Search (~250ms direct public API for real metadata & album titles)
+  const fetchITunesSongsFast = async () => {
+    try {
+      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=${limit}`, 2500);
+      if (json && Array.isArray(json.results)) {
+        return json.results.map((item) => {
+          const cover = item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+          const albumTitle = item.collectionName || 'Single';
+          return {
+            id: `it_song_${item.trackId}`,
+            title: item.trackName || 'Unknown Title',
+            artist: item.artistName || 'Unknown Artist',
+            artist_name: item.artistName || 'Unknown Artist',
+            album: albumTitle,
+            album_title: albumTitle,
+            album_name: albumTitle,
+            duration: Math.floor((item.trackTimeMillis || 180000) / 1000),
+            image_url: cover,
+            cover_url: cover,
+            image: cover,
+            artwork: cover,
+            preview_url: item.previewUrl || '',
+            audio_url: item.previewUrl || '',
+            source: 'itunes',
+          };
+        });
+      }
+    } catch (e) {}
+    return [];
+  };
+
+  // 6. Fast iTunes Albums Search (~250ms direct public API)
   const fetchITunesAlbums = async () => {
     try {
       const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=${limit}`, 2500);
@@ -225,7 +260,33 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
-  // 6. Fast JioSaavn Albums Search (~300ms)
+  // 7. Fast iTunes Artists Search (~250ms direct public API)
+  const fetchITunesArtistsFast = async () => {
+    try {
+      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=musicArtist&limit=${limit}`, 2500);
+      if (json && Array.isArray(json.results)) {
+        return json.results.map((item) => {
+          const name = item.artistName || 'Unknown Artist';
+          const genre = item.primaryGenreName || 'Artist';
+          return {
+            id: `it_art_${item.artistId}`,
+            name: name,
+            imageUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+            image_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+            cover_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+            image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+            genres: genre,
+            followers: null,
+            type: 'Artist',
+            source: 'itunes',
+          };
+        });
+      }
+    } catch (e) {}
+    return [];
+  };
+
+  // 8. Fast JioSaavn Albums Search (~300ms)
   const fetchSaavnAlbums = async () => {
     try {
       const json = await fastFetchJson(`https://saavn.dev/api/search/albums?query=${encodeURIComponent(q)}&limit=${limit}`, 2500);
@@ -266,7 +327,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
-  // 7. Fast JioSaavn Artists Search (~300ms)
+  // 9. Fast JioSaavn Artists Search (~300ms)
   const fetchSaavnArtistsFast = async () => {
     try {
       const json = await fastFetchJson(`https://saavn.dev/api/search/artists?query=${encodeURIComponent(q)}&limit=${limit}`, 2500);
@@ -300,7 +361,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
-  // 8. Deezer Artists & Albums
+  // 10. Deezer Artists & Albums
   const fetchDeezerMetadata = async () => {
     try {
       const res = await fastFetchJson(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.deezer.com/search/artist?q=${encodeURIComponent(q)}&limit=${limit}`)}`, 2500);
@@ -330,7 +391,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
   };
 
   try {
-    const [ytRes, saavnRes, audiusRes, jamendoRes, deezerMetaRes, iTunesAlbRes, saavnAlbRes, saavnArtRes] = await Promise.allSettled([
+    const [ytRes, saavnRes, audiusRes, jamendoRes, deezerMetaRes, iTunesAlbRes, saavnAlbRes, saavnArtRes, iTunesArtRes, iTunesSongsRes] = await Promise.allSettled([
       fetchYouTubeFast(),
       fetchSaavnFast(),
       fetchAudius(),
@@ -339,6 +400,8 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
       fetchITunesAlbums(),
       fetchSaavnAlbums(),
       fetchSaavnArtistsFast(),
+      fetchITunesArtistsFast(),
+      fetchITunesSongsFast(),
     ]);
 
     const ytTracks = ytRes.status === 'fulfilled' ? ytRes.value : [];
@@ -349,13 +412,15 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     const iTunesAlbums = iTunesAlbRes.status === 'fulfilled' ? iTunesAlbRes.value : [];
     const saavnAlbums = saavnAlbRes.status === 'fulfilled' ? saavnAlbRes.value : [];
     const saavnArtists = saavnArtRes.status === 'fulfilled' ? saavnArtRes.value : [];
+    const iTunesArtists = iTunesArtRes.status === 'fulfilled' ? iTunesArtRes.value : [];
+    const iTunesSongs = iTunesSongsRes.status === 'fulfilled' ? iTunesSongsRes.value : [];
 
-    const combinedSongs = [...saavnTracks, ...ytTracks, ...audiusTracks, ...jamendoTracks].filter(
-      (t) => t && t.audio_url && t.duration >= 60 && !isPreviewUrl(t.audio_url, t.duration)
+    const combinedSongs = [...iTunesSongs, ...saavnTracks, ...ytTracks, ...audiusTracks, ...jamendoTracks].filter(
+      (t) => t && t.audio_url
     );
 
     const combinedAlbums = [...iTunesAlbums, ...saavnAlbums];
-    const rawArtists = [...saavnArtists, ...deezerArtists];
+    const rawArtists = [...saavnArtists, ...deezerArtists, ...iTunesArtists];
     const seenArtNames = new Set();
     const combinedArtists = [];
     for (const art of rawArtists) {
