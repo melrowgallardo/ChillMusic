@@ -91,17 +91,55 @@ async def unified_search(
         jm = jm_res if not isinstance(jm_res, Exception) and jm_res else []
         return dz + jm
 
+import httpx
+
+async def fetch_itunes_albums(query: str, limit: int = 15) -> List[Dict[str, Any]]:
+    try:
+        async with httpx.AsyncClient(timeout=2.5) as client:
+            res = await client.get("https://itunes.apple.com/search", params={"term": query, "entity": "album", "limit": limit})
+            if res.status_code == 200:
+                data = res.json()
+                items = data.get("results", [])
+                albums = []
+                for item in items:
+                    cover = (item.get("artworkUrl100") or "").replace("100x100bb", "600x600bb") or "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80"
+                    release_date = (item.get("releaseDate") or "")[:4] or "2024"
+                    title = item.get("collectionName", "Unknown Album")
+                    artist_name = item.get("artistName", "Unknown Artist")
+                    albums.append({
+                        "id": f"it_{item.get('collectionId')}",
+                        "title": title,
+                        "name": title,
+                        "artist": artist_name,
+                        "artist_name": artist_name,
+                        "coverUrl": cover,
+                        "image": cover,
+                        "cover_url": cover,
+                        "image_url": cover,
+                        "releaseDate": release_date,
+                        "release_date": release_date,
+                        "trackCount": item.get("trackCount", 10),
+                        "track_count": item.get("trackCount", 10),
+                        "source": "itunes"
+                    })
+                return albums
+    except Exception:
+        pass
+    return []
+
     async def fetch_albums():
         if source == "jamendo":
             return await JamendoService.search_albums(query=q, limit=12)
         elif source == "deezer":
             return await DeezerService.search_albums(query=q, limit=12)
+        it_t = asyncio.create_task(fetch_itunes_albums(query=q, limit=12))
         dz_t = asyncio.create_task(DeezerService.search_albums(query=q, limit=12))
         jm_t = asyncio.create_task(JamendoService.search_albums(query=q, limit=12))
-        dz_res, jm_res = await asyncio.gather(dz_t, jm_t, return_exceptions=True)
+        it_res, dz_res, jm_res = await asyncio.gather(it_t, dz_t, jm_t, return_exceptions=True)
+        it = it_res if not isinstance(it_res, Exception) and it_res else []
         dz = dz_res if not isinstance(dz_res, Exception) and dz_res else []
         jm = jm_res if not isinstance(jm_res, Exception) and jm_res else []
-        return dz + jm
+        return it + dz + jm
 
     artists_task = asyncio.create_task(fetch_artists())
     albums_task = asyncio.create_task(fetch_albums())
