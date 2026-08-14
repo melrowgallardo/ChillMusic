@@ -39,16 +39,28 @@ class DeezerService:
         """Normalize Deezer album structure into ChillMusic album dictionary."""
         album_id = str(album.get("id", ""))
         artist = album.get("artist", {})
+        title = album.get("title", "Unknown Album")
+        artist_name = artist.get("name", "Unknown Artist")
+        cover = album.get("cover_medium") or album.get("cover_big") or album.get("cover_xl") or ""
+        release_date = album.get("release_date", "")
+        track_count = album.get("nb_tracks", 0)
 
         return {
             "id": f"dz_{album_id}" if album_id and not album_id.startswith("dz_") else album_id,
             "deezer_id": album_id.replace("dz_", ""),
-            "name": album.get("title", "Unknown Album"),
+            "name": title,
+            "title": title,
             "artist_id": str(artist.get("id", "")),
-            "artist_name": artist.get("name", "Unknown Artist"),
-            "image": album.get("cover_medium") or album.get("cover_big") or album.get("cover_xl") or "",
-            "releasedate": album.get("release_date", ""),
-            "track_count": album.get("nb_tracks", 0),
+            "artist": artist_name,
+            "artist_name": artist_name,
+            "image": cover,
+            "coverUrl": cover,
+            "cover_url": cover,
+            "image_url": cover,
+            "releaseDate": release_date,
+            "release_date": release_date,
+            "trackCount": track_count,
+            "track_count": track_count,
             "source": "deezer"
         }
 

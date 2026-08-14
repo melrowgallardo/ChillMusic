@@ -196,7 +196,7 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist }) => {
         }}
         noWrap
       >
-        {track.album_name || 'Single'}
+        {typeof track.album === 'object' ? (track.album?.name || track.album?.title) : (track.album_name || track.album_title || track.album || 'Single')}
       </Typography>
 
       {/* Right: Duration & Menu */}

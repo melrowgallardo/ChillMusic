@@ -8,7 +8,7 @@ import ArtistCard from '../components/Artist/ArtistCard';
 import AlbumCard from '../components/Album/AlbumCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
-import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ARTISTS } from '../services/mockData';
+import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ARTISTS, FALLBACK_ALBUMS } from '../services/mockData';
 
 const GENRE_TAGS = ['Chill', 'Lofi', 'Ambient', 'Electronic', 'Jazz', 'Rock', 'Pop', 'Acoustic', 'Piano', 'Hip Hop'];
 
@@ -62,7 +62,7 @@ const Search = () => {
         if (data) {
           setSongs(data.songs && data.songs.length > 0 ? data.songs : FALLBACK_TRACKS);
           setArtists(data.artists && data.artists.length > 0 ? data.artists : FALLBACK_ARTISTS);
-          setAlbums(data.albums || []);
+          setAlbums(data.albums && data.albums.length > 0 ? data.albums : FALLBACK_ALBUMS);
           setPlaylists(data.playlists && data.playlists.length > 0 ? data.playlists : FALLBACK_PLAYLISTS);
         } else {
           // Timeout occurred
@@ -72,7 +72,7 @@ const Search = () => {
           );
           setSongs(matchedSongs.length > 0 ? matchedSongs : FALLBACK_TRACKS);
           setArtists(FALLBACK_ARTISTS);
-          setAlbums([]);
+          setAlbums(FALLBACK_ALBUMS);
           setPlaylists(FALLBACK_PLAYLISTS);
         }
       }
@@ -81,6 +81,7 @@ const Search = () => {
       if (currentReq === searchReqId.current) {
         setSongs(FALLBACK_TRACKS);
         setArtists(FALLBACK_ARTISTS);
+        setAlbums(FALLBACK_ALBUMS);
         setPlaylists(FALLBACK_PLAYLISTS);
       }
     } finally {

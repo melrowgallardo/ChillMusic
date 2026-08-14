@@ -195,7 +195,78 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
-  // 5. Deezer Artists & Albums
+  // 5. Fast iTunes Albums Search (~250ms direct public API)
+  const fetchITunesAlbums = async () => {
+    try {
+      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=${limit}`, 2500);
+      if (json && Array.isArray(json.results)) {
+        return json.results.map((item) => {
+          const cover = item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80';
+          const releaseDate = item.releaseDate ? item.releaseDate.substring(0, 4) : '2024';
+          return {
+            id: `it_${item.collectionId}`,
+            title: item.collectionName || 'Unknown Album',
+            name: item.collectionName || 'Unknown Album',
+            artist: item.artistName || 'Unknown Artist',
+            artist_name: item.artistName || 'Unknown Artist',
+            coverUrl: cover,
+            image: cover,
+            image_url: cover,
+            cover_url: cover,
+            releaseDate: releaseDate,
+            release_date: releaseDate,
+            trackCount: item.trackCount || 10,
+            track_count: item.trackCount || 10,
+            source: 'itunes',
+          };
+        });
+      }
+    } catch (e) {}
+    return [];
+  };
+
+  // 6. Fast JioSaavn Albums Search (~300ms)
+  const fetchSaavnAlbums = async () => {
+    try {
+      const json = await fastFetchJson(`https://saavn.dev/api/search/albums?query=${encodeURIComponent(q)}&limit=${limit}`, 2500);
+      if (json && json.data) {
+        const items = json.data.results || (Array.isArray(json.data) ? json.data : []) || [];
+        return items.map((item) => {
+          const imgList = item.image || item.images || [];
+          let cover = '';
+          if (Array.isArray(imgList) && imgList.length > 0) {
+            const lastImg = imgList[imgList.length - 1];
+            cover = typeof lastImg === 'object' ? (lastImg.url || lastImg.link || '') : typeof lastImg === 'string' ? lastImg : '';
+          } else if (typeof imgList === 'string') {
+            cover = imgList;
+          }
+          if (!cover) cover = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80';
+          let artistName = item.artist || item.primaryArtists || (item.artists?.primary ? item.artists.primary.map((a) => a.name).join(', ') : 'Unknown Artist');
+          const releaseDate = String(item.year || item.releaseDate || '2024');
+
+          return {
+            id: `saavn_alb_${item.id || Math.random()}`,
+            title: item.name || item.title || 'Unknown Album',
+            name: item.name || item.title || 'Unknown Album',
+            artist: artistName,
+            artist_name: artistName,
+            coverUrl: cover,
+            image: cover,
+            image_url: cover,
+            cover_url: cover,
+            releaseDate: releaseDate,
+            release_date: releaseDate,
+            trackCount: item.songCount || item.trackCount || 10,
+            track_count: item.songCount || item.trackCount || 10,
+            source: 'saavn',
+          };
+        });
+      }
+    } catch (e) {}
+    return [];
+  };
+
+  // 7. Deezer Artists & Albums
   const fetchDeezerMetadata = async () => {
     try {
       const res = await fastFetchJson(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=${limit}`)}`, 2500);
@@ -223,9 +294,17 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
             albums.push({
               id: `dz_${item.album.id}`,
               title: item.album.title,
+              name: item.album.title,
               artist: item.artist?.name || 'Unknown Artist',
+              artist_name: item.artist?.name || 'Unknown Artist',
+              coverUrl: item.album.cover_medium || item.album.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+              image: item.album.cover_medium || item.album.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
               image_url: item.album.cover_medium || item.album.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
               cover_url: item.album.cover_medium || item.album.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
+              releaseDate: '2024',
+              release_date: '2024',
+              trackCount: 10,
+              track_count: 10,
               source: 'deezer',
             });
           }
@@ -237,12 +316,14 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
   };
 
   try {
-    const [ytRes, saavnRes, audiusRes, jamendoRes, deezerRes] = await Promise.allSettled([
+    const [ytRes, saavnRes, audiusRes, jamendoRes, deezerRes, iTunesAlbRes, saavnAlbRes] = await Promise.allSettled([
       fetchYouTubeFast(),
       fetchSaavnFast(),
       fetchAudius(),
       fetchJamendoFast(),
       fetchDeezerMetadata(),
+      fetchITunesAlbums(),
+      fetchSaavnAlbums(),
     ]);
 
     const ytTracks = ytRes.status === 'fulfilled' ? ytRes.value : [];
@@ -250,19 +331,23 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     const audiusTracks = audiusRes.status === 'fulfilled' ? audiusRes.value : [];
     const jamendoTracks = jamendoRes.status === 'fulfilled' ? jamendoRes.value : [];
     const deezerMeta = deezerRes.status === 'fulfilled' ? deezerRes.value : { artists: [], albums: [] };
+    const iTunesAlbums = iTunesAlbRes.status === 'fulfilled' ? iTunesAlbRes.value : [];
+    const saavnAlbums = saavnAlbRes.status === 'fulfilled' ? saavnAlbRes.value : [];
 
     const combinedSongs = [...saavnTracks, ...ytTracks, ...audiusTracks, ...jamendoTracks].filter(
       (t) => t && t.audio_url && t.duration >= 60 && !isPreviewUrl(t.audio_url, t.duration)
     );
 
+    const combinedAlbums = [...iTunesAlbums, ...saavnAlbums, ...(deezerMeta.albums || [])];
+
     const songs = combinedSongs.length > 0 ? combinedSongs : FALLBACK_TRACKS;
     const artists = deezerMeta.artists.length > 0 ? deezerMeta.artists : FALLBACK_ARTISTS;
-    const albums = deezerMeta.albums;
+    const albums = combinedAlbums.length > 0 ? combinedAlbums : FALLBACK_ALBUMS;
     const playlists = FALLBACK_PLAYLISTS;
 
     return { songs, artists, albums, playlists };
   } catch (e) {
-    return { songs: FALLBACK_TRACKS, artists: FALLBACK_ARTISTS, albums: [], playlists: FALLBACK_PLAYLISTS };
+    return { songs: FALLBACK_TRACKS, artists: FALLBACK_ARTISTS, albums: FALLBACK_ALBUMS, playlists: FALLBACK_PLAYLISTS };
   }
 };
 
