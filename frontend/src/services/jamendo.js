@@ -266,57 +266,71 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
-  // 7. Deezer Artists & Albums
+  // 7. Fast JioSaavn Artists Search (~300ms)
+  const fetchSaavnArtistsFast = async () => {
+    try {
+      const json = await fastFetchJson(`https://saavn.dev/api/search/artists?query=${encodeURIComponent(q)}&limit=${limit}`, 2500);
+      if (json && json.data) {
+        const items = json.data.results || (Array.isArray(json.data) ? json.data : []) || [];
+        return items.map((item) => {
+          const imgList = item.image || item.images || [];
+          let cover = '';
+          if (Array.isArray(imgList) && imgList.length > 0) {
+            const lastImg = imgList[imgList.length - 1];
+            cover = typeof lastImg === 'object' ? (lastImg.url || lastImg.link || '') : typeof lastImg === 'string' ? lastImg : '';
+          } else if (typeof imgList === 'string') {
+            cover = imgList;
+          }
+          if (!cover) cover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+          return {
+            id: `saavn_art_${item.id || Math.random()}`,
+            name: item.name || item.title || 'Unknown Artist',
+            imageUrl: cover,
+            image_url: cover,
+            cover_url: cover,
+            image: cover,
+            followers: item.followerCount ? `${(item.followerCount / 1000).toFixed(0)}K Fans` : null,
+            genres: item.role || 'Artist',
+            type: 'Artist',
+            source: 'saavn',
+          };
+        });
+      }
+    } catch (e) {}
+    return [];
+  };
+
+  // 8. Deezer Artists & Albums
   const fetchDeezerMetadata = async () => {
     try {
-      const res = await fastFetchJson(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=${limit}`)}`, 2500);
+      const res = await fastFetchJson(`https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.deezer.com/search/artist?q=${encodeURIComponent(q)}&limit=${limit}`)}`, 2500);
       if (res && res.contents) {
         const json = typeof res.contents === 'string' ? JSON.parse(res.contents) : res.contents;
         const items = json.data || [];
         const artists = [];
-        const albums = [];
-        const seenArt = new Set();
-        const seenAlb = new Set();
-
         for (const item of items) {
-          if (item.artist && !seenArt.has(item.artist.id)) {
-            seenArt.add(item.artist.id);
-            artists.push({
-              id: `dz_art_${item.artist.id}`,
-              name: item.artist.name,
-              image_url: item.artist.picture_medium || item.artist.picture || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-              cover_url: item.artist.picture_medium || item.artist.picture || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-              source: 'deezer',
-            });
-          }
-          if (item.album && !seenAlb.has(item.album.id)) {
-            seenAlb.add(item.album.id);
-            albums.push({
-              id: `dz_${item.album.id}`,
-              title: item.album.title,
-              name: item.album.title,
-              artist: item.artist?.name || 'Unknown Artist',
-              artist_name: item.artist?.name || 'Unknown Artist',
-              coverUrl: item.album.cover_medium || item.album.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-              image: item.album.cover_medium || item.album.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-              image_url: item.album.cover_medium || item.album.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-              cover_url: item.album.cover_medium || item.album.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-              releaseDate: '2024',
-              release_date: '2024',
-              trackCount: 10,
-              track_count: 10,
-              source: 'deezer',
-            });
-          }
+          const cover = item.picture_medium || item.picture_big || item.picture || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+          artists.push({
+            id: `dz_art_${item.id}`,
+            name: item.name,
+            imageUrl: cover,
+            image_url: cover,
+            cover_url: cover,
+            image: cover,
+            followers: item.nb_fan ? `${(item.nb_fan / 1000000).toFixed(1)}M Fans` : null,
+            genres: 'Artist',
+            type: 'Artist',
+            source: 'deezer',
+          });
         }
-        return { artists, albums };
+        return artists;
       }
     } catch (e) {}
-    return { artists: [], albums: [] };
+    return [];
   };
 
   try {
-    const [ytRes, saavnRes, audiusRes, jamendoRes, deezerRes, iTunesAlbRes, saavnAlbRes] = await Promise.allSettled([
+    const [ytRes, saavnRes, audiusRes, jamendoRes, deezerMetaRes, iTunesAlbRes, saavnAlbRes, saavnArtRes] = await Promise.allSettled([
       fetchYouTubeFast(),
       fetchSaavnFast(),
       fetchAudius(),
@@ -324,24 +338,35 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
       fetchDeezerMetadata(),
       fetchITunesAlbums(),
       fetchSaavnAlbums(),
+      fetchSaavnArtistsFast(),
     ]);
 
     const ytTracks = ytRes.status === 'fulfilled' ? ytRes.value : [];
     const saavnTracks = saavnRes.status === 'fulfilled' ? saavnRes.value : [];
     const audiusTracks = audiusRes.status === 'fulfilled' ? audiusRes.value : [];
     const jamendoTracks = jamendoRes.status === 'fulfilled' ? jamendoRes.value : [];
-    const deezerMeta = deezerRes.status === 'fulfilled' ? deezerRes.value : { artists: [], albums: [] };
+    const deezerArtists = deezerMetaRes.status === 'fulfilled' ? deezerMetaRes.value : [];
     const iTunesAlbums = iTunesAlbRes.status === 'fulfilled' ? iTunesAlbRes.value : [];
     const saavnAlbums = saavnAlbRes.status === 'fulfilled' ? saavnAlbRes.value : [];
+    const saavnArtists = saavnArtRes.status === 'fulfilled' ? saavnArtRes.value : [];
 
     const combinedSongs = [...saavnTracks, ...ytTracks, ...audiusTracks, ...jamendoTracks].filter(
       (t) => t && t.audio_url && t.duration >= 60 && !isPreviewUrl(t.audio_url, t.duration)
     );
 
-    const combinedAlbums = [...iTunesAlbums, ...saavnAlbums, ...(deezerMeta.albums || [])];
+    const combinedAlbums = [...iTunesAlbums, ...saavnAlbums];
+    const rawArtists = [...saavnArtists, ...deezerArtists];
+    const seenArtNames = new Set();
+    const combinedArtists = [];
+    for (const art of rawArtists) {
+      if (art && art.name && !seenArtNames.has(art.name.toLowerCase())) {
+        seenArtNames.add(art.name.toLowerCase());
+        combinedArtists.push(art);
+      }
+    }
 
     const songs = combinedSongs.length > 0 ? combinedSongs : FALLBACK_TRACKS;
-    const artists = deezerMeta.artists.length > 0 ? deezerMeta.artists : FALLBACK_ARTISTS;
+    const artists = combinedArtists.length > 0 ? combinedArtists : FALLBACK_ARTISTS;
     const albums = combinedAlbums.length > 0 ? combinedAlbums : FALLBACK_ALBUMS;
     const playlists = FALLBACK_PLAYLISTS;
 
