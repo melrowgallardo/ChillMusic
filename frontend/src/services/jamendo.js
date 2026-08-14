@@ -1,4 +1,5 @@
 import api from './api';
+import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ARTISTS } from './mockData';
 
 // Helper to prevent browser fetch calls from hanging indefinitely
 const fetchWithTimeout = async (url, timeoutMs = 8000) => {
@@ -444,7 +445,8 @@ export const getTrendingSongs = async (limit = 20, offset = 0) => {
     console.warn('Backend getTrendingSongs failed, falling back to public API');
   }
   const fallback = await fallbackUnifiedSearch('top hits', limit);
-  return fallback.songs;
+  if (fallback.songs && fallback.songs.length > 0) return fallback.songs;
+  return FALLBACK_TRACKS.slice(0, limit);
 };
 
 export const getNewReleases = async (limit = 20, offset = 0) => {
@@ -455,7 +457,8 @@ export const getNewReleases = async (limit = 20, offset = 0) => {
     console.warn('Backend getNewReleases failed, falling back to public API');
   }
   const fallback = await fallbackUnifiedSearch('new releases music', limit);
-  return fallback.songs;
+  if (fallback.songs && fallback.songs.length > 0) return fallback.songs;
+  return FALLBACK_TRACKS.slice().reverse().slice(0, limit);
 };
 
 export const getRecommendations = async (tag = 'chill', limit = 20) => {
@@ -466,7 +469,8 @@ export const getRecommendations = async (tag = 'chill', limit = 20) => {
     console.warn('Backend getRecommendations failed, falling back to public API');
   }
   const fallback = await fallbackUnifiedSearch(tag, limit);
-  return fallback.songs;
+  if (fallback.songs && fallback.songs.length > 0) return fallback.songs;
+  return FALLBACK_TRACKS.slice(0, limit);
 };
 
 export const searchSongs = async (query, limit = 20, source = 'all') => {
@@ -477,7 +481,8 @@ export const searchSongs = async (query, limit = 20, source = 'all') => {
     console.warn('Backend searchSongs failed, falling back to public API');
   }
   const fallback = await fallbackUnifiedSearch(query, limit);
-  return fallback.songs;
+  if (fallback.songs && fallback.songs.length > 0) return fallback.songs;
+  return FALLBACK_TRACKS.slice(0, limit);
 };
 
 export const searchUnified = async (query, limit = 20, source = 'all') => {
@@ -489,7 +494,9 @@ export const searchUnified = async (query, limit = 20, source = 'all') => {
   } catch (err) {
     console.warn('Backend searchUnified failed, falling back to public API');
   }
-  return await fallbackUnifiedSearch(query, limit);
+  const res = await fallbackUnifiedSearch(query, limit);
+  if (res.songs && res.songs.length > 0) return res;
+  return { songs: FALLBACK_TRACKS, artists: FALLBACK_ARTISTS, albums: [], playlists: FALLBACK_PLAYLISTS };
 };
 
 export const searchArtists = async (query, limit = 20) => {
@@ -500,7 +507,8 @@ export const searchArtists = async (query, limit = 20) => {
     console.warn('Backend searchArtists failed, falling back to public API');
   }
   const fallback = await fallbackUnifiedSearch(query, limit);
-  return fallback.artists;
+  if (fallback.artists && fallback.artists.length > 0) return fallback.artists;
+  return FALLBACK_ARTISTS;
 };
 
 export const searchAlbums = async (query, limit = 20) => {
@@ -511,7 +519,7 @@ export const searchAlbums = async (query, limit = 20) => {
     console.warn('Backend searchAlbums failed, falling back to public API');
   }
   const fallback = await fallbackUnifiedSearch(query, limit);
-  return fallback.albums;
+  return fallback.albums || [];
 };
 
 export const searchPlaylists = async (query, limit = 20) => {
@@ -522,31 +530,8 @@ export const searchPlaylists = async (query, limit = 20) => {
     console.warn('Backend searchPlaylists failed, falling back to public API');
   }
   const fallback = await fallbackUnifiedSearch(query, 10);
-  const cover = fallback.songs[0]?.image_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
-  return [
-    {
-      id: `pl-${query}`,
-      name: `${query} Top Hits`,
-      title: `${query} Top Hits`,
-      description: `Best ${query} songs curated for you`,
-      image_url: cover,
-      cover_url: cover,
-      image: cover,
-      artwork: cover,
-      track_count: 20,
-    },
-    {
-      id: `pl-chill-${query}`,
-      name: `Chill ${query} Mix`,
-      title: `Chill ${query} Mix`,
-      description: `Relaxing ${query} vibes and melodies`,
-      image_url: fallback.songs[1]?.image_url || cover,
-      cover_url: fallback.songs[1]?.image_url || cover,
-      image: fallback.songs[1]?.image_url || cover,
-      artwork: fallback.songs[1]?.image_url || cover,
-      track_count: 15,
-    },
-  ];
+  if (fallback.playlists && fallback.playlists.length > 0) return fallback.playlists;
+  return FALLBACK_PLAYLISTS;
 };
 
 export const getArtistDetails = async (artistId) => {

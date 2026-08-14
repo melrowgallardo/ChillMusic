@@ -1,5 +1,6 @@
 import api from './api';
 import { searchUnified } from './jamendo';
+import { FALLBACK_TRACKS } from './mockData';
 
 const fetchWithTimeout = async (url, timeoutMs = 8000) => {
   const controller = new AbortController();
@@ -216,7 +217,8 @@ export const getYouTubeTrending = async (limit = 20) => {
   const yt = await fetchYouTubePublic('trending top hits music', limit);
   if (yt.length > 0) return yt;
   const fallback = await searchUnified('trending top hits', limit);
-  return fallback.songs || [];
+  if (fallback.songs && fallback.songs.length > 0) return fallback.songs;
+  return FALLBACK_TRACKS.slice(0, limit);
 };
 
 export const searchYouTubeSongs = async (query, limit = 20) => {
@@ -229,7 +231,8 @@ export const searchYouTubeSongs = async (query, limit = 20) => {
   const yt = await fetchYouTubePublic(query, limit);
   if (yt.length > 0) return yt;
   const fallback = await searchUnified(query, limit);
-  return fallback.songs || [];
+  if (fallback.songs && fallback.songs.length > 0) return fallback.songs;
+  return FALLBACK_TRACKS.slice(0, limit);
 };
 
 export const getYouTubeVideoDetails = async (videoId) => {

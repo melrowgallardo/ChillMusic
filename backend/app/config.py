@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     JAMENDO_CLIENT_ID: str = "aee77fe5"
     JAMENDO_CLIENT_SECRET: str = "aec8afccc478b45b2a9f7687d6781a1"
     YOUTUBE_API_KEY: str = "AIzaSyAVW_86xvVRgRWu25NFhyiPGBSpuHx_BvA"
-    DATABASE_URL: str = "mysql+pymysql://root:@localhost:3306/chillmusic"
+    DATABASE_URL: str = "sqlite:///./chillmusic.db"
     SECRET_KEY: str = "chillmusic_super_secret_jwt_key_2026_antigravity"
     REFRESH_SECRET_KEY: str = "chillmusic_super_secret_refresh_key_2026_antigravity"
     ALGORITHM: str = "HS256"

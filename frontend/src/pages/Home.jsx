@@ -11,16 +11,17 @@ import ArtistCard from '../components/Artist/ArtistCard';
 import { usePlayer } from '../context/PlayerContext';
 import { cacheSongsLocally } from '../services/offlineSync';
 import { getHistory } from '../services/firestoreService';
+import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ARTISTS } from '../services/mockData';
 
 const Home = () => {
   const { playTrack, currentTrack } = usePlayer();
   const [recentTracks, setRecentTracks] = useState([]);
-  const [trending, setTrending] = useState([]);
-  const [youtubeHits, setYoutubeHits] = useState([]);
-  const [newReleases, setNewReleases] = useState([]);
-  const [recommendations, setRecommendations] = useState([]);
-  const [playlists, setPlaylists] = useState([]);
-  const [artists, setArtists] = useState([]);
+  const [trending, setTrending] = useState(FALLBACK_TRACKS);
+  const [youtubeHits, setYoutubeHits] = useState(FALLBACK_TRACKS);
+  const [newReleases, setNewReleases] = useState(FALLBACK_TRACKS);
+  const [recommendations, setRecommendations] = useState(FALLBACK_TRACKS);
+  const [playlists, setPlaylists] = useState(FALLBACK_PLAYLISTS);
+  const [artists, setArtists] = useState(FALLBACK_ARTISTS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,10 +40,10 @@ const Home = () => {
               uniqueHistory.push({
                 id: item.song_id || item.id,
                 title: item.song_title || item.title,
-                artist_name: item.artist_name,
-                album_name: item.album_name || 'Single',
+                artist_name: item.artist_name || item.artist,
+                album_name: item.album_name || item.album || 'Single',
                 audio_url: item.audio_url,
-                image_url: item.image_url,
+                image_url: item.image_url || item.cover_url,
                 duration: item.duration || 180,
               });
             }
@@ -56,8 +57,10 @@ const Home = () => {
       // 2. Fetch YouTube Hits (fast)
       try {
         const ytData = await getYouTubeTrending(6);
-        if (isMounted && ytData && ytData.length > 0) {
-          setYoutubeHits(ytData);
+        if (isMounted) {
+          if (ytData && ytData.length > 0) {
+            setYoutubeHits(ytData);
+          }
           setLoading(false); // Remove main loading spinner early!
         }
       } catch (err) {
@@ -67,10 +70,12 @@ const Home = () => {
       // 3. Fetch Jamendo Trending
       try {
         const trData = await getTrendingSongs(10);
-        if (isMounted && trData) {
-          setTrending(trData);
+        if (isMounted) {
+          if (trData && trData.length > 0) {
+            setTrending(trData);
+            cacheSongsLocally(trData);
+          }
           setLoading(false);
-          cacheSongsLocally(trData);
         }
       } catch (err) {
         console.warn('Trending fetch error:', err);
@@ -79,17 +84,17 @@ const Home = () => {
       // 4. Fetch remainder progressively
       try {
         const [nrData, recData, plData, artData] = await Promise.all([
-          getNewReleases(10).catch(() => []),
-          getRecommendations('chill', 10).catch(() => []),
-          searchPlaylists('chill', 6).catch(() => []),
-          searchArtists('lofi', 6).catch(() => []),
+          getNewReleases(10).catch(() => FALLBACK_TRACKS),
+          getRecommendations('chill', 10).catch(() => FALLBACK_TRACKS),
+          searchPlaylists('chill', 6).catch(() => FALLBACK_PLAYLISTS),
+          searchArtists('lofi', 6).catch(() => FALLBACK_ARTISTS),
         ]);
 
         if (isMounted) {
-          setNewReleases(nrData || []);
-          setRecommendations(recData || []);
-          setPlaylists(plData || []);
-          setArtists(artData || []);
+          if (nrData && nrData.length > 0) setNewReleases(nrData);
+          if (recData && recData.length > 0) setRecommendations(recData);
+          if (plData && plData.length > 0) setPlaylists(plData);
+          if (artData && artData.length > 0) setArtists(artData);
           setLoading(false);
         }
       } catch (err) {
@@ -106,7 +111,9 @@ const Home = () => {
     };
   }, []);
 
-  const heroTrack = currentTrack || trending[0] || youtubeHits[0];
+  const heroTrack = currentTrack || (trending && trending.length > 0 ? trending[0] : null) || (youtubeHits && youtubeHits.length > 0 ? youtubeHits[0] : null) || FALLBACK_TRACKS[0];
+
+  const trackPool = (trending && trending.length > 0) ? trending : ((youtubeHits && youtubeHits.length > 0) ? youtubeHits : FALLBACK_TRACKS);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -135,13 +142,13 @@ const Home = () => {
               {heroTrack.title}
             </Typography>
             <Typography variant="body1" sx={{ color: 'var(--text-secondary)', mb: 3 }}>
-              By {heroTrack.artist_name}
+              By {heroTrack.artist_name || heroTrack.artist || 'Featured Artist'}
             </Typography>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant="contained"
                 startIcon={<PlayArrowIcon />}
-                onClick={() => playTrack(heroTrack, trending.length ? trending : youtubeHits, 0)}
+                onClick={() => playTrack(heroTrack, trackPool, 0)}
                 sx={{
                   backgroundColor: 'var(--accent-primary)',
                   borderRadius: 'var(--radius-full)',
@@ -158,9 +165,8 @@ const Home = () => {
                 variant="outlined"
                 startIcon={<ShuffleIcon />}
                 onClick={() => {
-                  const pool = trending.length ? trending : youtubeHits;
-                  const randomIdx = Math.floor(Math.random() * pool.length);
-                  playTrack(pool[randomIdx], pool, randomIdx);
+                  const randomIdx = Math.floor(Math.random() * trackPool.length);
+                  playTrack(trackPool[randomIdx], trackPool, randomIdx);
                 }}
                 sx={{
                   borderColor: 'var(--border-color)',
@@ -178,7 +184,7 @@ const Home = () => {
 
           <Box
             component="img"
-            src={heroTrack.image_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80'}
+            src={heroTrack.image_url || heroTrack.cover_url || heroTrack.image || heroTrack.artwork || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80'}
             alt={heroTrack.title}
             sx={{
               width: { xs: 180, sm: 220 },
