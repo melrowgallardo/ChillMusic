@@ -211,14 +211,19 @@ export const PlayerProvider = ({ children }) => {
       setCurrentTrack(targetTrack);
     }
 
+    // Clear previous audio buffer when a new song starts to prevent playing stale cached audio
     const audio = audioRef.current;
+    audio.pause();
+    audio.currentTime = 0;
+    audio.removeAttribute('src');
+    audio.load();
+
     const defaultUrl = getFullAudioUrl(targetTrack.audio_url);
 
     const startPlay = (urlToPlay) => {
-      if (urlToPlay && audio.src !== urlToPlay) {
-        audio.src = urlToPlay;
-      }
       if (urlToPlay) {
+        audio.src = urlToPlay;
+        audio.load(); // Dynamically update and reload exact audio URL matching currentTrack.id
         audio
           .play()
           .then(() => {

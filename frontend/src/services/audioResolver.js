@@ -32,10 +32,106 @@ const fetchWithTimeout = async (url, timeoutMs = 3000) => {
   }
 };
 
+const containsKeyword = (text, keyword) => {
+  if (!text) return false;
+  return new RegExp(`\\b${keyword}\\b`, 'i').test(text);
+};
+
 /**
- * Resolves full-length audio stream for a track.
- * If the track already has a valid full-length audio URL, returns it immediately.
- * If it's a 30s preview URL or missing audio URL, queries YouTube/Piped/JioSaavn/Audius for the full song.
+ * Ranks and filters candidate audio tracks to avoid unwanted remixes, covers, or live tracks,
+ * prioritizing official audio and topic channels.
+ */
+export const filterAndRankAudioCandidates = (candidates, originalTitle, originalArtist) => {
+  if (!Array.isArray(candidates) || candidates.length === 0) return [];
+
+  const titleLower = (originalTitle || '').toLowerCase();
+  const artistLower = (originalArtist || '').toLowerCase();
+
+  const wantsRemix = containsKeyword(titleLower, 'remix') || containsKeyword(titleLower, 'rework');
+  const wantsCover =
+    containsKeyword(titleLower, 'cover') ||
+    containsKeyword(titleLower, 'instrumental') ||
+    containsKeyword(titleLower, 'karaoke');
+  const wantsLive = containsKeyword(titleLower, 'live');
+
+  return candidates
+    .map((candidate) => {
+      if (!candidate || (!candidate.audio_url && !candidate.stream_url)) return null;
+
+      const candidateTitle = (candidate.title || '').toLowerCase();
+      const candidateArtist = (
+        candidate.artist_name ||
+        candidate.artist ||
+        candidate.uploader ||
+        ''
+      ).toLowerCase();
+      let score = 0;
+
+      // Penalty for undesired Remix / Rework
+      if (
+        !wantsRemix &&
+        (candidateTitle.includes('remix') ||
+          candidateTitle.includes('rework') ||
+          candidateTitle.includes('bootleg'))
+      ) {
+        score -= 50;
+      }
+
+      // Penalty for undesired Cover / Instrumental / Karaoke
+      if (
+        !wantsCover &&
+        (candidateTitle.includes('cover') ||
+          candidateTitle.includes('instrumental') ||
+          candidateTitle.includes('piano cover') ||
+          candidateTitle.includes('guitar cover') ||
+          candidateTitle.includes('karaoke') ||
+          candidateTitle.includes('tribute'))
+      ) {
+        score -= 50;
+      }
+
+      // Penalty for undesired Live performance
+      if (
+        !wantsLive &&
+        (candidateTitle.includes('live at') ||
+          candidateTitle.includes('live in') ||
+          candidateTitle.includes('live 20') ||
+          candidateTitle.includes('live performance'))
+      ) {
+        score -= 30;
+      }
+
+      // Priority boost for Official Audio / Topic / VEVO Channel
+      if (
+        candidateTitle.includes('official audio') ||
+        candidateTitle.includes('official music video') ||
+        candidateTitle.includes('official video') ||
+        candidateArtist.includes('topic') ||
+        candidateArtist.includes('vevo')
+      ) {
+        score += 30;
+      }
+
+      // Priority boost if uploader matches artist name
+      if (artistLower && candidateArtist.includes(artistLower)) {
+        score += 25;
+      }
+
+      // Priority boost if title matches original title
+      if (titleLower && candidateTitle.includes(titleLower)) {
+        score += 20;
+      }
+
+      return { candidate, score };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.candidate);
+};
+
+/**
+ * Resolves full-length audio stream for a track strictly matching artist and title.
+ * Formats query as: `${track.artist} - ${track.title} official audio`
  */
 export const resolveFullAudioTrack = async (track) => {
   if (!track) return track;
@@ -45,73 +141,75 @@ export const resolveFullAudioTrack = async (track) => {
     return track;
   }
 
-  const queryStr = `${track.title || ''} ${track.artist_name || track.artist || ''}`.trim();
-  if (!queryStr) return track;
+  const artistName = (track.artist_name || track.artist || '').trim();
+  const trackTitle = (track.title || '').trim();
 
-  console.log(`Resolving full song audio for preview track: "${queryStr}"...`);
+  // Query audio source using exact format: "${track.artist} - ${track.title} official audio"
+  const searchQuery = artistName
+    ? `${artistName} - ${trackTitle} official audio`
+    : `${trackTitle} official audio`;
 
-  // 1. Try YouTube / Invidious / Piped public search (fast)
+  console.log(`Resolving exact audio stream for: "${searchQuery}"...`);
+
+  // 1. YouTube Public Search with keyword filtering & official audio ranking
   try {
-    const ytTracks = await fetchYouTubePublic(queryStr, 3);
-    const fullYt = ytTracks.find((t) => t && t.audio_url && !isPreviewUrl(t.audio_url, t.duration) && t.duration >= 60);
-    if (fullYt) {
+    const ytTracks = await fetchYouTubePublic(searchQuery, 10);
+    const rankedYt = filterAndRankAudioCandidates(ytTracks, trackTitle, artistName);
+    const bestYt = rankedYt.find(
+      (t) => t && t.audio_url && !isPreviewUrl(t.audio_url, t.duration) && t.duration >= 60
+    );
+
+    if (bestYt) {
       return {
         ...track,
-        audio_url: fullYt.audio_url,
-        duration: fullYt.duration || track.duration || 210,
-        source: fullYt.source || 'youtube',
-        image_url: track.image_url || fullYt.image_url,
+        audio_url: bestYt.audio_url,
+        duration: bestYt.duration || track.duration || 210,
+        source: bestYt.source || 'youtube',
+        image_url: track.image_url || bestYt.image_url,
       };
     }
   } catch (err) {
-    console.warn('YouTube full song resolution failed:', err);
+    console.warn('YouTube exact stream resolution error:', err);
   }
 
-  // 2. Try Audius API (fast open music API)
+  // 2. JioSaavn CDN Search
   try {
-    const res = await fetchWithTimeout(`https://api.audius.co/v1/tracks/search?query=${encodeURIComponent(queryStr)}&limit=3`, 2500);
+    const res = await fetchWithTimeout(
+      `https://saavn.dev/api/search/songs?query=${encodeURIComponent(searchQuery)}&limit=10`,
+      2500
+    );
     if (res.ok) {
       const json = await res.json();
-      const items = json.data || [];
-      const valid = items.find((i) => i.duration >= 60);
-      if (valid) {
+      const results = json.data?.results || [];
+      const saavnCandidates = results.map((item) => {
+        const audioList = item.downloadUrl || item.url || [];
+        let url = '';
+        if (Array.isArray(audioList) && audioList.length > 0) {
+          url = audioList[audioList.length - 1].url || audioList[audioList.length - 1].link || '';
+        }
+        return {
+          title: item.name || item.title,
+          artist_name: item.primaryArtists || item.artist,
+          audio_url: url,
+          duration: parseInt(item.duration || 210, 10),
+        };
+      });
+
+      const rankedSaavn = filterAndRankAudioCandidates(saavnCandidates, trackTitle, artistName);
+      const bestSaavn = rankedSaavn.find((t) => t && t.audio_url && !isPreviewUrl(t.audio_url, t.duration));
+
+      if (bestSaavn) {
         return {
           ...track,
-          audio_url: `https://api.audius.co/v1/tracks/${valid.id}/stream`,
-          duration: valid.duration || track.duration || 210,
-          source: 'audius',
+          audio_url: bestSaavn.audio_url,
+          duration: bestSaavn.duration || track.duration || 210,
+          source: 'saavn',
         };
       }
     }
   } catch (err) {
-    console.warn('Audius full song resolution failed:', err);
+    console.warn('Saavn exact stream resolution error:', err);
   }
 
-  // 3. Try JioSaavn API
-  try {
-    const res = await fetchWithTimeout(`https://saavn.dev/api/search/songs?query=${encodeURIComponent(queryStr)}&limit=3`, 2500);
-    if (res.ok) {
-      const json = await res.json();
-      const results = json.data?.results || [];
-      for (const item of results) {
-        const audioList = item.downloadUrl || item.url || [];
-        if (Array.isArray(audioList) && audioList.length > 0) {
-          const u = audioList[audioList.length - 1].url || audioList[audioList.length - 1].link || '';
-          if (u && !isPreviewUrl(u, item.duration)) {
-            return {
-              ...track,
-              audio_url: u,
-              duration: parseInt(item.duration || track.duration || 210, 10),
-              source: 'saavn',
-            };
-          }
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Saavn full song resolution failed:', err);
-  }
-
-  // Fallback: If no full song stream found, keep track as is
   return track;
 };
