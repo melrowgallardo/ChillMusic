@@ -12,6 +12,7 @@ const PlayerContext = createContext();
 
 export const PlayerProvider = ({ children }) => {
   const audioRef = useRef(new Audio());
+  const ytPlayerRef = useRef(null);
   const [currentTrack, setCurrentTrack] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [queue, setQueue] = useState([]);
@@ -312,6 +313,19 @@ export const PlayerProvider = ({ children }) => {
 
   const togglePlayPause = () => {
     if (!currentTrack) return;
+    if (ytPlayerRef.current && typeof ytPlayerRef.current.getPlayerState === 'function') {
+      try {
+        const state = ytPlayerRef.current.getPlayerState();
+        if (isPlaying || state === 1) {
+          ytPlayerRef.current.pauseVideo();
+          setIsPlaying(false);
+        } else {
+          ytPlayerRef.current.playVideo();
+          setIsPlaying(true);
+        }
+        return;
+      } catch (e) {}
+    }
     const audio = audioRef.current;
     if (isPlaying) {
       audio.pause();
@@ -323,8 +337,15 @@ export const PlayerProvider = ({ children }) => {
 
   const handleTrackEnd = () => {
     if (repeatMode === 'one') {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play();
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === 'function') {
+        try {
+          ytPlayerRef.current.seekTo(0, true);
+          ytPlayerRef.current.playVideo();
+        } catch (e) {}
+      } else {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play();
+      }
     } else if (repeatMode === 'all' && currentIndex === queue.length - 1) {
       nextTrack(true);
     } else {
@@ -361,7 +382,7 @@ export const PlayerProvider = ({ children }) => {
     if (queue.length === 0) return;
 
     if (currentTime > 3) {
-      audioRef.current.currentTime = 0;
+      seekTo(0);
       return;
     }
 
@@ -375,15 +396,27 @@ export const PlayerProvider = ({ children }) => {
   };
 
   const seekTo = (seconds) => {
+    setCurrentTime(seconds);
+    if (ytPlayerRef.current && typeof ytPlayerRef.current.seekTo === 'function') {
+      try {
+        ytPlayerRef.current.seekTo(seconds, true);
+      } catch (e) {}
+    }
     if (audioRef.current) {
       audioRef.current.currentTime = seconds;
-      setCurrentTime(seconds);
     }
   };
 
   const handleVolumeChange = (newVol) => {
     setVolume(newVol);
-    audioRef.current.volume = newVol;
+    if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === 'function') {
+      try {
+        ytPlayerRef.current.setVolume(newVol * 100);
+      } catch (e) {}
+    }
+    if (audioRef.current) {
+      audioRef.current.volume = newVol;
+    }
     if (newVol > 0 && isMuted) setIsMuted(false);
   };
 
@@ -502,6 +535,7 @@ export const PlayerProvider = ({ children }) => {
     <PlayerContext.Provider
       value={{
         audioRef,
+        ytPlayerRef,
         currentTrack,
         isPlaying,
         setIsPlaying,

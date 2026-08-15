@@ -140,6 +140,10 @@ export const resolveFullAudioTrack = async (track) => {
   if (!track) return track;
 
   const existingUrl = track.audio_url || track.audioUrl;
+  const existingYtId =
+    track.youtubeId ||
+    track.videoId ||
+    (track.id && String(track.id).startsWith('yt_') ? String(track.id).replace('yt_', '') : null);
 
   // Determine full target duration (e.g. from trackTimeMillis or track.duration if > 35, else default 210s)
   const fullDuration =
@@ -153,6 +157,8 @@ export const resolveFullAudioTrack = async (track) => {
   if (existingUrl && !isPreviewUrl(existingUrl, track.duration)) {
     return {
       ...track,
+      youtubeId: existingYtId,
+      videoId: existingYtId,
       audio_url: existingUrl,
       audioUrl: existingUrl,
       duration: fullDuration,
@@ -179,8 +185,11 @@ export const resolveFullAudioTrack = async (track) => {
     if (bestYt) {
       const streamUrl = bestYt.audio_url || bestYt.stream_url;
       const resolvedDur = bestYt.duration && bestYt.duration >= 60 ? bestYt.duration : fullDuration;
+      const ytId = bestYt.id ? String(bestYt.id).replace('yt_', '') : existingYtId;
       return {
         ...track,
+        youtubeId: ytId,
+        videoId: ytId,
         audio_url: streamUrl,
         audioUrl: streamUrl,
         duration: resolvedDur,
@@ -221,6 +230,8 @@ export const resolveFullAudioTrack = async (track) => {
       if (bestSaavn) {
         return {
           ...track,
+          youtubeId: existingYtId,
+          videoId: existingYtId,
           audio_url: bestSaavn.audio_url,
           audioUrl: bestSaavn.audio_url,
           duration: bestSaavn.duration || fullDuration,
@@ -252,6 +263,8 @@ export const resolveFullAudioTrack = async (track) => {
       if (bestAudius) {
         return {
           ...track,
+          youtubeId: existingYtId,
+          videoId: existingYtId,
           audio_url: bestAudius.audio_url,
           audioUrl: bestAudius.audio_url,
           duration: bestAudius.duration || fullDuration,
@@ -265,6 +278,8 @@ export const resolveFullAudioTrack = async (track) => {
   const backendStreamUrl = `${API_BASE_URL}/youtube/stream-by-query?q=${encodeURIComponent(ytSearchQuery)}`;
   return {
     ...track,
+    youtubeId: existingYtId,
+    videoId: existingYtId,
     audio_url: backendStreamUrl,
     audioUrl: backendStreamUrl,
     duration: fullDuration,
