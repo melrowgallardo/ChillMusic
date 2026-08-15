@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
   Box,
   Typography,
   TextField,
   Button,
-  Paper,
   Alert,
   Divider,
+  IconButton,
   Snackbar,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import PersonAddOutlinedIcon from '@mui/icons-material/PersonAddOutlined';
-import { useNavigate, Link } from 'react-router-dom';
-import { auth, db } from '../firebase';
+import { auth, db } from '../../firebase';
 import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
@@ -58,9 +61,7 @@ const formatErrorMessage = (err) => {
   }
 };
 
-const Register = () => {
-  const navigate = useNavigate();
-
+const RegisterModal = ({ open, onClose, onSuccess }) => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -104,13 +105,11 @@ const Register = () => {
 
     setSendingCode(true);
     try {
-      // Step 1: Generate 6-digit OTP
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedOtp(code);
-      setOtpExpiration(Date.now() + 10 * 60 * 1000); // 10 minutes
+      setOtpExpiration(Date.now() + 10 * 60 * 1000);
       setIsCodeSent(true);
 
-      // Send via EmailJS (if configured) or console log
       try {
         const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_chillmusic';
         const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_otp';
@@ -127,7 +126,7 @@ const Register = () => {
           publicKey
         );
       } catch (emailErr) {
-        console.info('EmailJS send attempt (verification code generated):', code, emailErr);
+        console.info('EmailJS send attempt:', code, emailErr);
       }
 
       setInfoToast('Verification code sent to your email!');
@@ -154,7 +153,6 @@ const Register = () => {
       return;
     }
 
-    // Step 2: Verification Check
     if (!isCodeSent || !userOtpInput.trim()) {
       setError('⚠️ Please enter the correct 6-digit code sent to your email.');
       return;
@@ -172,11 +170,9 @@ const Register = () => {
 
     setLoading(true);
     try {
-      // 1. Create User with Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
-      // 2. Save user profile metadata in Firestore with isVerified: true
       await setDoc(doc(db, 'users', user.uid), {
         username: username.trim(),
         email: email.trim(),
@@ -184,12 +180,13 @@ const Register = () => {
         createdAt: new Date(),
       });
 
-      setSuccessToast('Account created successfully! Redirecting...');
+      setSuccessToast('Account created successfully!');
       setTimeout(() => {
-        navigate('/');
-      }, 1200);
+        if (onSuccess) onSuccess(user);
+        if (onClose) onClose();
+      }, 1000);
     } catch (err) {
-      console.error('Registration error detail:', err);
+      console.error('Registration error:', err);
       setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
@@ -216,7 +213,8 @@ const Register = () => {
           createdAt: new Date(),
         });
       }
-      navigate('/');
+      if (onSuccess) onSuccess(user);
+      if (onClose) onClose();
     } catch (err) {
       console.error('Google Auth error:', err);
       if (err.code !== 'auth/popup-closed-by-user') {
@@ -228,56 +226,28 @@ const Register = () => {
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '80vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        py: 4,
+    <Dialog
+      open={open}
+      onClose={onClose}
+      PaperProps={{
+        className: 'glass-panel',
+        sx: { p: 3, maxWidth: 440, width: '100%', borderRadius: 'var(--radius-lg)' },
       }}
     >
-      <Paper
-        className="glass-panel"
-        sx={{
-          p: 4,
-          width: '100%',
-          maxWidth: 450,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 3,
-        }}
-      >
-        <Box
-          sx={{
-            width: 50,
-            height: 50,
-            borderRadius: 'var(--radius-full)',
-            backgroundColor: 'rgba(6, 182, 212, 0.2)',
-            color: 'var(--accent-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <PersonAddOutlinedIcon />
-        </Box>
-
-        <Box sx={{ textAlign: 'center' }}>
-          <Typography variant="h5" sx={{ fontWeight: 800, fontFamily: 'var(--font-heading)' }}>
-            Join ChillMusic
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'var(--text-muted)', mt: 0.5 }}>
-            Create an account to stream music, create playlists, & save favorites
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0, mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <PersonAddOutlinedIcon sx={{ color: 'var(--accent-secondary)' }} />
+          <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: 'var(--font-heading)' }}>
+            Sign Up for ChillMusic
           </Typography>
         </Box>
+        <IconButton onClick={onClose} size="small">
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
 
-        {error && (
-          <Alert severity="error" sx={{ width: '100%', borderRadius: 'var(--radius-sm)' }}>
-            {error}
-          </Alert>
-        )}
+      <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {error && <Alert severity="error">{error}</Alert>}
 
         <Button
           fullWidth
@@ -290,25 +260,18 @@ const Register = () => {
             borderColor: 'var(--border-color)',
             color: 'var(--text-primary)',
             fontWeight: 600,
-            fontSize: '0.95rem',
+            fontSize: '0.9rem',
             borderRadius: 'var(--radius-md)',
             textTransform: 'none',
-            backgroundColor: 'rgba(255, 255, 255, 0.03)',
-            '&:hover': {
-              borderColor: 'var(--accent-secondary)',
-              backgroundColor: 'rgba(6, 182, 212, 0.08)',
-            },
           }}
         >
           Continue with Google
         </Button>
 
-        <Divider sx={{ width: '100%', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600 }}>
-          OR
-        </Divider>
+        <Divider sx={{ my: 1, fontSize: '0.8rem' }}>OR</Divider>
 
         <form onSubmit={handleSubmit} style={{ width: '100%' }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
               label="Username"
               required
@@ -317,39 +280,32 @@ const Register = () => {
               onChange={(e) => setUsername(e.target.value)}
             />
 
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <TextField
-                  label="Email Address"
-                  type="email"
-                  required
-                  fullWidth
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <Button
-                  variant="outlined"
-                  onClick={handleSendCode}
-                  disabled={sendingCode || cooldown > 0}
-                  sx={{
-                    whiteSpace: 'nowrap',
-                    minWidth: 125,
-                    height: 56,
-                    borderColor: 'var(--accent-secondary)',
-                    color: 'var(--accent-secondary)',
-                    fontWeight: 700,
-                    fontSize: '0.82rem',
-                    borderRadius: 'var(--radius-md)',
-                    textTransform: 'none',
-                    '&:hover': {
-                      backgroundColor: 'rgba(6, 182, 212, 0.1)',
-                      borderColor: 'var(--accent-secondary)',
-                    },
-                  }}
-                >
-                  {sendingCode ? 'Sending...' : cooldown > 0 ? `Resend ${cooldown}s` : '📩 Send Code'}
-                </Button>
-              </Box>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <TextField
+                label="Email Address"
+                type="email"
+                required
+                fullWidth
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <Button
+                variant="outlined"
+                onClick={handleSendCode}
+                disabled={sendingCode || cooldown > 0}
+                sx={{
+                  whiteSpace: 'nowrap',
+                  minWidth: 120,
+                  height: 56,
+                  borderColor: 'var(--accent-secondary)',
+                  color: 'var(--accent-secondary)',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  textTransform: 'none',
+                }}
+              >
+                {sendingCode ? 'Sending...' : cooldown > 0 ? `Resend ${cooldown}s` : '📩 Send Code'}
+              </Button>
             </Box>
 
             {isCodeSent && (
@@ -391,39 +347,17 @@ const Register = () => {
             </Button>
           </Box>
         </form>
+      </DialogContent>
 
-        <Typography variant="body2" sx={{ color: 'var(--text-muted)' }}>
-          Already have an account?{' '}
-          <Link to="/login" style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>
-            Sign In
-          </Link>
-        </Typography>
-      </Paper>
-
-      {/* Notifications */}
-      <Snackbar
-        open={Boolean(infoToast)}
-        autoHideDuration={4000}
-        onClose={() => setInfoToast('')}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity="info" onClose={() => setInfoToast('')} sx={{ width: '100%', borderRadius: 'var(--radius-sm)' }}>
-          {infoToast}
-        </Alert>
+      <Snackbar open={Boolean(infoToast)} autoHideDuration={4000} onClose={() => setInfoToast('')}>
+        <Alert severity="info" onClose={() => setInfoToast('')}>{infoToast}</Alert>
       </Snackbar>
 
-      <Snackbar
-        open={Boolean(successToast)}
-        autoHideDuration={3000}
-        onClose={() => setSuccessToast('')}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity="success" onClose={() => setSuccessToast('')} sx={{ width: '100%', borderRadius: 'var(--radius-sm)' }}>
-          {successToast}
-        </Alert>
+      <Snackbar open={Boolean(successToast)} autoHideDuration={3000} onClose={() => setSuccessToast('')}>
+        <Alert severity="success" onClose={() => setSuccessToast('')}>{successToast}</Alert>
       </Snackbar>
-    </Box>
+    </Dialog>
   );
 };
 
-export default Register;
+export default RegisterModal;
