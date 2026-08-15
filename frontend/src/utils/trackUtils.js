@@ -26,15 +26,21 @@ export const normalizeTrack = (item) => {
       : '/default-cover.png';
 
   const duration =
-    item.duration || (item.trackTimeMillis ? Math.floor(item.trackTimeMillis / 1000) : 180);
-  const audioUrl =
-    item.previewUrl ||
+    item.duration && item.duration > 35
+      ? item.duration
+      : item.trackTimeMillis
+      ? Math.floor(item.trackTimeMillis / 1000)
+      : item.duration || 210;
+
+  const rawAudio =
+    item.audio_url ||
     item.audioUrl ||
+    item.stream_url ||
     item.streamUrl ||
     item.url ||
-    item.audio_url ||
-    item.preview_url ||
     '';
+
+  const audioUrl = rawAudio || '';
 
   return {
     ...item,
@@ -54,3 +60,4 @@ export const normalizeTrack = (item) => {
     audio_url: audioUrl,
   };
 };
+

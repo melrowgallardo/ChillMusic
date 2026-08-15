@@ -1,4 +1,5 @@
 import { fetchYouTubePublic } from './youtube';
+import { API_BASE_URL } from './api';
 
 // Helper to detect 30s preview URLs or short preview tracks
 export const isPreviewUrl = (url, duration) => {
@@ -131,45 +132,58 @@ export const filterAndRankAudioCandidates = (candidates, originalTitle, original
 
 /**
  * Resolves full-length audio stream for a track strictly matching artist and title.
- * Formats query as: `${track.artist} - ${track.title}`
- * Uses fallback audio stream sources (YouTube, JioSaavn, Audius, iTunes previewUrl, or guaranteed fallback).
+ * Formats query as: `${track.artist} - ${track.title} official audio`
+ * Uses YouTube Audio Stream Resolvers / Piped / Invidious / Backend yt_dlp stream / JioSaavn CDN / Audius
+ * Completely replaces 30-second iTunes preview URLs with full-length streaming.
  */
 export const resolveFullAudioTrack = async (track) => {
   if (!track) return track;
 
-  const existingUrl = track.audio_url || track.audioUrl || track.preview_url || track.previewUrl;
+  const existingUrl = track.audio_url || track.audioUrl;
 
-  // If track already has a valid full audio stream, return as-is
+  // Determine full target duration (e.g. from trackTimeMillis or track.duration if > 35, else default 210s)
+  const fullDuration =
+    track.duration && track.duration > 35
+      ? track.duration
+      : track.trackTimeMillis
+      ? Math.floor(track.trackTimeMillis / 1000)
+      : 210;
+
+  // If track already has a valid full audio stream (not a 30s previewUrl), return as-is
   if (existingUrl && !isPreviewUrl(existingUrl, track.duration)) {
     return {
       ...track,
       audio_url: existingUrl,
+      audioUrl: existingUrl,
+      duration: fullDuration,
     };
   }
 
   const artistName = (track.artist_name || track.artist || '').trim();
   const trackTitle = (track.title || '').trim();
 
-  // Query audio source using format: "${track.artist} - ${track.title}"
-  const searchQuery = artistName
-    ? `${artistName} - ${trackTitle}`
-    : `${trackTitle}`;
+  // Prompt requirement: format query as `${track.artist} - ${track.title} official audio`
+  const searchQuery = artistName ? `${artistName} - ${trackTitle}` : `${trackTitle}`;
+  const ytSearchQuery = `${searchQuery} official audio`;
 
-  console.log(`Resolving exact audio stream for: "${searchQuery}"...`);
+  console.log(`Resolving full audio stream for: "${ytSearchQuery}"...`);
 
   // 1. YouTube Public Search (Piped / Invidious API mirrors)
   try {
-    const ytTracks = await fetchYouTubePublic(`${searchQuery} official audio`, 10);
+    const ytTracks = await fetchYouTubePublic(ytSearchQuery, 10);
     const rankedYt = filterAndRankAudioCandidates(ytTracks, trackTitle, artistName);
     const bestYt = rankedYt.find(
       (t) => t && (t.audio_url || t.stream_url) && !isPreviewUrl(t.audio_url || t.stream_url, t.duration) && t.duration >= 60
     );
 
     if (bestYt) {
+      const streamUrl = bestYt.audio_url || bestYt.stream_url;
+      const resolvedDur = bestYt.duration && bestYt.duration >= 60 ? bestYt.duration : fullDuration;
       return {
         ...track,
-        audio_url: bestYt.audio_url || bestYt.stream_url,
-        duration: bestYt.duration || track.duration || 210,
+        audio_url: streamUrl,
+        audioUrl: streamUrl,
+        duration: resolvedDur,
         source: bestYt.source || 'youtube',
         image_url: track.image_url || bestYt.image_url,
       };
@@ -178,7 +192,7 @@ export const resolveFullAudioTrack = async (track) => {
     console.warn('YouTube exact stream resolution error:', err);
   }
 
-  // 2. JioSaavn CDN Search
+  // 2. JioSaavn CDN Search (Full Studio Audio Streams)
   try {
     const res = await fetchWithTimeout(
       `https://saavn.dev/api/search/songs?query=${encodeURIComponent(searchQuery)}&limit=10`,
@@ -202,13 +216,14 @@ export const resolveFullAudioTrack = async (track) => {
       });
 
       const rankedSaavn = filterAndRankAudioCandidates(saavnCandidates, trackTitle, artistName);
-      const bestSaavn = rankedSaavn.find((t) => t && t.audio_url && !isPreviewUrl(t.audio_url, t.duration));
+      const bestSaavn = rankedSaavn.find((t) => t && t.audio_url && !isPreviewUrl(t.audio_url, t.duration) && t.duration >= 60);
 
       if (bestSaavn) {
         return {
           ...track,
           audio_url: bestSaavn.audio_url,
-          duration: bestSaavn.duration || track.duration || 210,
+          audioUrl: bestSaavn.audio_url,
+          duration: bestSaavn.duration || fullDuration,
           source: 'saavn',
         };
       }
@@ -233,52 +248,27 @@ export const resolveFullAudioTrack = async (track) => {
         duration: i.duration,
       }));
       const rankedAudius = filterAndRankAudioCandidates(audiusCandidates, trackTitle, artistName);
-      if (rankedAudius.length > 0 && rankedAudius[0].audio_url) {
+      const bestAudius = rankedAudius.find((t) => t && t.audio_url && t.duration >= 60);
+      if (bestAudius) {
         return {
           ...track,
-          audio_url: rankedAudius[0].audio_url,
-          duration: rankedAudius[0].duration || track.duration || 210,
+          audio_url: bestAudius.audio_url,
+          audioUrl: bestAudius.audio_url,
+          duration: bestAudius.duration || fullDuration,
           source: 'audius',
         };
       }
     }
   } catch (err) {}
 
-  // 4. iTunes 30s previewUrl Immediate Fallback
-  try {
-    const itunesRes = await fetchWithTimeout(
-      `https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=song&limit=1`,
-      2500
-    );
-    if (itunesRes.ok) {
-      const itunesData = await itunesRes.json();
-      if (itunesData.results && itunesData.results.length > 0) {
-        const item = itunesData.results[0];
-        if (item.previewUrl) {
-          return {
-            ...track,
-            audio_url: item.previewUrl,
-            duration: 30,
-            source: 'itunes_fallback',
-          };
-        }
-      }
-    }
-  } catch (err) {}
-
-  // 5. If track has existing preview/audio URL, return it
-  if (existingUrl) {
-    return {
-      ...track,
-      audio_url: existingUrl,
-    };
-  }
-
-  // 6. Guaranteed audio stream fallback so no song ever fails to load
+  // 4. Backend YouTube Stream Resolver using yt_dlp Endpoint (/api/youtube/stream-by-query)
+  const backendStreamUrl = `${API_BASE_URL}/youtube/stream-by-query?q=${encodeURIComponent(ytSearchQuery)}`;
   return {
     ...track,
-    audio_url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-    duration: 210,
-    source: 'guaranteed_fallback',
+    audio_url: backendStreamUrl,
+    audioUrl: backendStreamUrl,
+    duration: fullDuration,
+    source: 'youtube_backend_stream',
   };
 };
+

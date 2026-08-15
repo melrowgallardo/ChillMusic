@@ -33,7 +33,12 @@ const AudioPlayer = () => {
       preload="auto"
       onLoadedMetadata={() => {
         if (audioRef?.current?.duration) {
-          setDuration(audioRef.current.duration);
+          const dur = audioRef.current.duration;
+          if (dur > 35) {
+            setDuration(dur);
+          } else if (currentTrack?.duration && currentTrack.duration > 35) {
+            setDuration(currentTrack.duration);
+          }
         }
       }}
       onTimeUpdate={() => {

@@ -143,8 +143,10 @@ export const PlayerProvider = ({ children }) => {
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
     const handleLoadedMetadata = () => {
       const realDur = audio.duration;
-      if (realDur && !isNaN(realDur) && isFinite(realDur) && realDur > 0) {
+      if (realDur && !isNaN(realDur) && isFinite(realDur) && realDur > 35) {
         setDuration(realDur);
+      } else if (currentTrack?.duration && currentTrack.duration > 35) {
+        setDuration(currentTrack.duration);
       }
     };
     const handleEnded = () => handleTrackEnd();
@@ -164,11 +166,11 @@ export const PlayerProvider = ({ children }) => {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, [queue, currentIndex, isShuffle, repeatMode]);
+  }, [queue, currentIndex, isShuffle, repeatMode, currentTrack]);
 
   const getFullAudioUrl = (url) => {
     if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) {
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:')) {
       return url;
     }
     const cleanUrl = url.startsWith('/api') ? url.substring(4) : url;
@@ -199,6 +201,11 @@ export const PlayerProvider = ({ children }) => {
     setCurrentIndex(0);
     setQueue(targetQueue);
     setCurrentTrack(normalizedSong);
+    if (normalizedSong.duration && normalizedSong.duration > 35) {
+      setDuration(normalizedSong.duration);
+    } else {
+      setDuration(210);
+    }
 
     // Auto-populate queue to 20-30 context-aware tracks if short
     if (targetQueue.length < 20) {
@@ -218,6 +225,9 @@ export const PlayerProvider = ({ children }) => {
     const targetTrack = normalizeTrack(resolvedTarget || normalizedSong);
     if (targetTrack) {
       setCurrentTrack(targetTrack);
+      if (targetTrack.duration && targetTrack.duration > 35) {
+        setDuration(targetTrack.duration);
+      }
     }
 
     // Clear previous audio buffer when a new song starts to prevent playing stale cached audio

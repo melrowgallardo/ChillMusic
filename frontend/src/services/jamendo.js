@@ -216,6 +216,7 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
         return json.results.map((item) => {
           const cover = item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
           const albumTitle = item.collectionName || 'Single';
+          const fullDur = Math.floor((item.trackTimeMillis || 210000) / 1000);
           return {
             id: `it_song_${item.trackId}`,
             title: item.trackName || 'Unknown Title',
@@ -224,13 +225,13 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
             album: albumTitle,
             album_title: albumTitle,
             album_name: albumTitle,
-            duration: Math.floor((item.trackTimeMillis || 180000) / 1000),
+            duration: fullDur,
             image_url: cover,
             cover_url: cover,
             image: cover,
             artwork: cover,
-            preview_url: item.previewUrl || '',
-            audio_url: item.previewUrl || '',
+            preview_url: '',
+            audio_url: '',
             source: 'itunes',
           };
         });
