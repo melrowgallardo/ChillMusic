@@ -167,7 +167,7 @@ const Profile = () => {
               helperText="Email address cannot be changed."
             />
 
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 1 }}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center', mt: 1 }}>
               <Button
                 type="submit"
                 variant="contained"
@@ -194,6 +194,30 @@ const Profile = () => {
                 }}
               >
                 Log Out
+              </Button>
+              <Button
+                type="button"
+                variant="outlined"
+                size="small"
+                onClick={() => setOpenConfirmDelete(true)}
+                startIcon={<DeleteForeverIcon sx={{ fontSize: '1rem !important' }} />}
+                sx={{
+                  px: 2,
+                  py: 0.8,
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  borderColor: 'rgba(239, 68, 68, 0.3)',
+                  color: '#f87171',
+                  borderRadius: 'var(--radius-md)',
+                  '&:hover': {
+                    borderColor: 'rgba(239, 68, 68, 0.6)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: '#fca5a5',
+                  },
+                }}
+              >
+                Delete Account
               </Button>
             </Box>
           </Box>
@@ -268,37 +292,6 @@ const Profile = () => {
           sx={{ borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)', fontWeight: 700 }}
         >
           {syncing ? 'Syncing Now...' : 'Force Offline Queue Sync'}
-        </Button>
-      </Paper>
-
-      {/* Danger Zone: Delete Account */}
-      <Paper
-        className="glass-panel"
-        sx={{
-          p: 4,
-          borderColor: 'rgba(239, 68, 68, 0.4)',
-          backgroundColor: 'rgba(239, 68, 68, 0.04)',
-        }}
-      >
-        <Typography variant="h6" sx={{ fontWeight: 700, color: '#ef4444', mb: 1 }}>
-          Danger Zone
-        </Typography>
-        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', mb: 3 }}>
-          Permanently remove your profile data, saved playlists, favorites, and playback history.
-        </Typography>
-        <Button
-          variant="contained"
-          color="error"
-          startIcon={<DeleteForeverIcon />}
-          onClick={() => setOpenConfirmDelete(true)}
-          sx={{
-            backgroundColor: '#ef4444',
-            fontWeight: 700,
-            px: 3,
-            '&:hover': { backgroundColor: '#dc2626' },
-          }}
-        >
-          🗑️ Delete Account
         </Button>
       </Paper>
 
