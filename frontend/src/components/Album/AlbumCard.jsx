@@ -5,16 +5,24 @@ import { useNavigate } from 'react-router-dom';
 const AlbumCard = ({ album }) => {
   const navigate = useNavigate();
 
-  const title = album?.title || album?.name || 'Unknown Album';
-  const artist = album?.artist || album?.artist_name || 'Various Artists';
-  const cover = album?.coverUrl || album?.image || album?.cover_url || album?.image_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80';
-  const rawDate = String(album?.releaseDate || album?.release_date || '');
+  if (!album) return null;
+
+  const title = album.title || album.name || 'Unknown Album';
+  const artist = album.artist || album.artist_name || 'Various Artists';
+  const cover = album.coverUrl || album.image || album.cover_url || album.image_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80';
+  const rawDate = String(album.releaseDate || album.release_date || '');
   const year = rawDate ? rawDate.substring(0, 4) : '';
+
+  const handleCardClick = () => {
+    const rawId = album.collectionId || album.id || '';
+    const cleanId = String(rawId).replace('it_', '').replace('dz_', '').replace('saavn_alb_', '');
+    navigate(`/album/${cleanId}`, { state: { album } });
+  };
 
   return (
     <Box
       className="glass-card"
-      onClick={() => navigate(`/album/${album.id}`)}
+      onClick={handleCardClick}
       sx={{
         padding: '14px',
         display: 'flex',

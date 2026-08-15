@@ -1,41 +1,134 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, Avatar } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import { useParams } from 'react-router-dom';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { getAlbumDetails } from '../services/jamendo';
 import TrackList from '../components/Track/TrackList';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import { usePlayer } from '../context/PlayerContext';
+import { normalizeTrack } from '../utils/trackUtils';
 
 const AlbumDetail = () => {
   const { id } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { playTrack } = usePlayer();
+
   const [album, setAlbum] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchAlbum = async () => {
-      setLoading(true);
-      try {
-        const data = await getAlbumDetails(id);
-        setAlbum(data);
-      } catch (err) {
-        console.error('Failed to load album:', err);
-      } finally {
+    const fetchAlbumDetails = async () => {
+      setError('');
+
+      // 1. Check if location.state contains album with valid tracks
+      const passedAlbum = location.state?.album;
+      if (passedAlbum && Array.isArray(passedAlbum.tracks) && passedAlbum.tracks.length > 0) {
+        const normalizedTracks = passedAlbum.tracks.map(normalizeTrack);
+        setAlbum({
+          ...passedAlbum,
+          tracks: normalizedTracks,
+        });
         setLoading(false);
+        return;
       }
+
+      setLoading(true);
+      const cleanId = String(id || '').replace('it_', '').replace('dz_', '').replace('saavn_alb_', '');
+
+      // 2. Fetch direct from iTunes Lookup API: https://itunes.apple.com/lookup?id=${id}&entity=song
+      try {
+        const res = await fetch(`https://itunes.apple.com/lookup?id=${cleanId}&entity=song`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results && data.results.length > 0) {
+            const albumInfo = data.results[0]; // Collection header info
+            const tracks = data.results.slice(1).map((track) =>
+              normalizeTrack({
+                id: String(track.trackId || Math.random()),
+                title: track.trackName || 'Unknown Track',
+                artist: track.artistName || albumInfo.artistName || 'Unknown Artist',
+                artist_name: track.artistName || albumInfo.artistName || 'Unknown Artist',
+                album: track.collectionName || albumInfo.collectionName || 'Album',
+                album_name: track.collectionName || albumInfo.collectionName || 'Album',
+                cover: (track.artworkUrl100 || albumInfo.artworkUrl100 || '').replace('100x100bb', '500x500bb'),
+                duration: track.trackTimeMillis ? Math.floor(track.trackTimeMillis / 1000) : 180,
+                audioUrl: '',
+                source: 'itunes',
+              })
+            );
+
+            setAlbum({
+              id: albumInfo.collectionId || cleanId,
+              title: albumInfo.collectionName || passedAlbum?.title || 'Unknown Album',
+              name: albumInfo.collectionName || passedAlbum?.name || 'Unknown Album',
+              artist: albumInfo.artistName || passedAlbum?.artist || 'Various Artists',
+              artist_name: albumInfo.artistName || passedAlbum?.artist_name || 'Various Artists',
+              cover: (albumInfo.artworkUrl100 || passedAlbum?.coverUrl || passedAlbum?.image || '').replace('100x100bb', '500x500bb'),
+              image: (albumInfo.artworkUrl100 || passedAlbum?.coverUrl || passedAlbum?.image || '').replace('100x100bb', '500x500bb'),
+              releaseDate: albumInfo.releaseDate?.split('-')[0] || passedAlbum?.releaseDate || 'Recent',
+              tracks: tracks,
+            });
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('iTunes lookup fetch failed, trying fallback details service:', err);
+      }
+
+      // 3. Fallback to Jamendo / Deezer / Backend getAlbumDetails
+      try {
+        const fallbackData = await getAlbumDetails(id);
+        if (fallbackData && (fallbackData.name || fallbackData.title)) {
+          const normTracks = (fallbackData.tracks || []).map(normalizeTrack);
+          setAlbum({
+            ...fallbackData,
+            tracks: normTracks,
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (fallbackErr) {
+        console.error('Error fetching fallback album details:', fallbackErr);
+      }
+
+      setError('Album not found.');
+      setLoading(false);
     };
-    fetchAlbum();
-  }, [id]);
+
+    if (id) fetchAlbumDetails();
+  }, [id, location.state]);
 
   if (loading) return <LoadingSpinner message="Loading album..." />;
-  if (!album) return <Typography>Album not found.</Typography>;
+
+  if (error || !album) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <Typography variant="h5" sx={{ color: 'var(--text-muted)', fontWeight: 700 }}>
+          {error || 'Album not found.'}
+        </Typography>
+        <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => navigate(-1)} sx={{ borderColor: 'var(--border-color)', color: 'var(--text-primary)' }}>
+          Back to Search
+        </Button>
+      </Box>
+    );
+  }
+
+  const title = album.title || album.name || 'Unknown Album';
+  const artist = album.artist || album.artist_name || 'Various Artists';
+  const cover = album.cover || album.image || album.coverUrl || album.image_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=500&q=80';
+  const releaseYear = album.releaseDate || album.releasedate || album.release_date || 'Recent';
+  const tracksList = album.tracks || [];
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {/* Header Bar */}
       <Box className="glass-panel" sx={{ p: 4, display: 'flex', gap: 4, alignItems: 'flex-end', flexDirection: { xs: 'column', md: 'row' } }}>
         <Avatar
-          src={album.image || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&q=80'}
+          src={cover}
           variant="rounded"
           sx={{ width: 200, height: 200, borderRadius: 'var(--radius-md)', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)' }}
         />
@@ -44,17 +137,17 @@ const AlbumDetail = () => {
             ALBUM
           </Typography>
           <Typography variant="h3" sx={{ fontWeight: 800, my: 1, fontFamily: 'var(--font-heading)' }}>
-            {album.name}
+            {title}
           </Typography>
           <Typography variant="h6" sx={{ color: 'var(--text-secondary)', mb: 2 }}>
-            By {album.artist_name} • Released {album.releasedate || 'Recent'}
+            By {artist} • Released {releaseYear} • {tracksList.length} Tracks
           </Typography>
 
-          {album.tracks && album.tracks.length > 0 && (
+          {tracksList.length > 0 && (
             <Button
               variant="contained"
               startIcon={<PlayArrowIcon />}
-              onClick={() => playTrack(album.tracks[0], album.tracks, 0)}
+              onClick={() => playTrack(tracksList[0], tracksList, 0)}
               sx={{ backgroundColor: 'var(--accent-primary)', borderRadius: 'var(--radius-full)', px: 4, py: 1, fontWeight: 700 }}
             >
               Play Album
@@ -63,7 +156,8 @@ const AlbumDetail = () => {
         </Box>
       </Box>
 
-      <TrackList tracks={album.tracks || []} />
+      {/* Tracklist Table */}
+      <TrackList tracks={tracksList} />
     </Box>
   );
 };
