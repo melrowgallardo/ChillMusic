@@ -47,15 +47,16 @@ const AlbumDetail = () => {
             const albumInfo = data.results[0]; // Collection header info
             const tracks = data.results.slice(1).map((track) =>
               normalizeTrack({
-                id: String(track.trackId || Math.random()),
-                title: track.trackName || 'Unknown Track',
+                id: String(track.trackId || track.id || Math.random()),
+                title: track.trackName || track.title || 'Unknown Track',
                 artist: track.artistName || albumInfo.artistName || 'Unknown Artist',
                 artist_name: track.artistName || albumInfo.artistName || 'Unknown Artist',
                 album: track.collectionName || albumInfo.collectionName || 'Album',
                 album_name: track.collectionName || albumInfo.collectionName || 'Album',
                 cover: (track.artworkUrl100 || albumInfo.artworkUrl100 || '').replace('100x100bb', '500x500bb'),
                 duration: track.trackTimeMillis ? Math.floor(track.trackTimeMillis / 1000) : 180,
-                audioUrl: '',
+                audioUrl: track.previewUrl || track.audioUrl || track.streamUrl || '',
+                previewUrl: track.previewUrl || '',
                 source: 'itunes',
               })
             );
@@ -123,6 +124,11 @@ const AlbumDetail = () => {
   const releaseYear = album.releaseDate || album.releasedate || album.release_date || 'Recent';
   const tracksList = album.tracks || [];
 
+  const handlePlayAlbum = () => {
+    if (!tracksList || tracksList.length === 0) return;
+    playTrack(tracksList[0], tracksList, 0);
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {/* Header Bar */}
@@ -147,7 +153,7 @@ const AlbumDetail = () => {
             <Button
               variant="contained"
               startIcon={<PlayArrowIcon />}
-              onClick={() => playTrack(tracksList[0], tracksList, 0)}
+              onClick={handlePlayAlbum}
               sx={{ backgroundColor: 'var(--accent-primary)', borderRadius: 'var(--radius-full)', px: 4, py: 1, fontWeight: 700 }}
             >
               Play Album

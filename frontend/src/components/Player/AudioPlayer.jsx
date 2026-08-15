@@ -12,19 +12,21 @@ const AudioPlayer = () => {
   } = usePlayer();
 
   useEffect(() => {
-    if (audioRef?.current && currentTrack?.audioUrl) {
+    const url = currentTrack?.audioUrl || currentTrack?.audio_url;
+    if (audioRef?.current && url) {
+      audioRef.current.src = url;
       audioRef.current.load();
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => setIsPlaying(true))
           .catch((err) => {
-            console.warn('Autoplay / Stream load failed:', err);
+            console.warn('Playback error or autoplay blocked:', err);
             setIsPlaying(false);
           });
       }
     }
-  }, [currentTrack?.audioUrl, audioRef, setIsPlaying]);
+  }, [currentTrack?.audioUrl, currentTrack?.audio_url, currentTrack?.id, audioRef, setIsPlaying]);
 
   return (
     <audio
