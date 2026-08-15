@@ -118,8 +118,17 @@ const TrackCard = ({ track, queue = [] }) => {
       >
         <Box
           component="img"
-          src={track.image_url || track.cover_url || track.image || track.artwork || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80'}
-          alt={track.title}
+          loading="lazy"
+          decoding="async"
+          src={
+            (track.cover || track.image_url || track.cover_url || track.image || track.artwork || '/default-cover.png')
+              .replace('100x100bb', '300x300bb')
+              .replace('1000x1000bb', '300x300bb')
+          }
+          onError={(e) => {
+            e.target.src = '/default-cover.png';
+          }}
+          alt={track.title || 'Music Track'}
           sx={{
             position: 'absolute',
             top: 0,
@@ -127,6 +136,7 @@ const TrackCard = ({ track, queue = [] }) => {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
+            backgroundColor: 'rgba(255, 255, 255, 0.05)',
           }}
         />
 

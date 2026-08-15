@@ -163,9 +163,18 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
 
         <Box
           component="img"
-          src={track.image_url || track.cover_url || track.image || track.artwork || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80'}
-          alt={track.title}
-          sx={{ width: 42, height: 42, borderRadius: 'var(--radius-sm)', objectFit: 'cover' }}
+          loading="lazy"
+          decoding="async"
+          src={
+            (track.cover || track.image_url || track.cover_url || track.image || track.artwork || '/default-cover.png')
+              .replace('100x100bb', '300x300bb')
+              .replace('1000x1000bb', '300x300bb')
+          }
+          onError={(e) => {
+            e.target.src = '/default-cover.png';
+          }}
+          alt={track.title || 'Music Track'}
+          sx={{ width: 42, height: 42, borderRadius: 'var(--radius-sm)', objectFit: 'cover', backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
         />
 
         <Box sx={{ overflow: 'hidden' }}>

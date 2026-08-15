@@ -186,12 +186,17 @@ const QueueDrawer = () => {
                   <ListItemAvatar sx={{ minWidth: 48, mr: 1 }}>
                     <Avatar
                       src={
-                        track.image_url ||
-                        track.cover_url ||
-                        track.image ||
-                        track.artwork ||
-                        'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80'
+                        (track.cover || track.image_url || track.cover_url || track.image || track.artwork || '/default-cover.png')
+                          .replace('100x100bb', '300x300bb')
+                          .replace('1000x1000bb', '300x300bb')
                       }
+                      imgProps={{
+                        loading: 'lazy',
+                        decoding: 'async',
+                        onError: (e) => {
+                          e.target.src = '/default-cover.png';
+                        },
+                      }}
                       variant="rounded"
                       sx={{ width: 40, height: 40 }}
                     />

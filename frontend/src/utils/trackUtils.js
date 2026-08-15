@@ -1,43 +1,49 @@
 /**
- * Normalizes every track object to ensure consistent property access across all components.
+ * Normalizes every track object cleanly across Search, Library, and Player.
  */
-export const normalizeTrack = (song) => {
-  if (!song) return null;
+export const normalizeTrack = (item) => {
+  if (!item) return null;
 
-  const id = String(song.id || song.trackId || song.key || Date.now());
-  const title = song.title || song.trackName || song.name || 'Unknown Title';
-  const artist = song.artist || song.artistName || song.artist_name || 'Unknown Artist';
-  const artist_name = song.artist_name || song.artist || song.artistName || 'Unknown Artist';
-  const album = song.album || song.collectionName || 'Single';
-  const album_name = song.album_name || song.album || song.collectionName || 'Single';
+  const id = String(item.trackId || item.id || item.key || Date.now());
+  const title = item.trackName || item.title || item.name || 'Unknown Title';
+  const artist = item.artistName || item.artist || item.artist_name || 'Unknown Artist';
+  const artist_name = item.artist_name || item.artistName || item.artist || 'Unknown Artist';
+  const album = item.collectionName || item.album || item.album_name || 'Single';
+
+  const rawCover =
+    item.cover ||
+    item.artworkUrl100?.replace('100x100bb', '300x300bb') ||
+    item.artworkUrl60?.replace('60x60bb', '300x300bb') ||
+    item.image_url ||
+    item.cover_url ||
+    item.image ||
+    item.artwork ||
+    '/default-cover.png';
+
   const cover =
-    song.cover ||
-    song.image_url ||
-    song.cover_url ||
-    song.image ||
-    song.artwork ||
-    song.artworkUrl100?.replace('100x100bb', '500x500bb') ||
-    song.artworkUrl60 ||
-    'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+    typeof rawCover === 'string'
+      ? rawCover.replace('100x100bb', '300x300bb').replace('1000x1000bb', '300x300bb')
+      : '/default-cover.png';
+
   const duration =
-    song.duration || (song.trackTimeMillis ? Math.floor(song.trackTimeMillis / 1000) : 180);
+    item.duration || (item.trackTimeMillis ? Math.floor(item.trackTimeMillis / 1000) : 180);
   const audioUrl =
-    song.audioUrl ||
-    song.previewUrl ||
-    song.streamUrl ||
-    song.url ||
-    song.audio_url ||
-    song.preview_url ||
+    item.previewUrl ||
+    item.audioUrl ||
+    item.streamUrl ||
+    item.url ||
+    item.audio_url ||
+    item.preview_url ||
     '';
 
   return {
-    ...song,
+    ...item,
     id,
     title,
     artist,
     artist_name,
     album,
-    album_name,
+    album_name: album,
     cover,
     image_url: cover,
     cover_url: cover,

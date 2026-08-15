@@ -77,7 +77,18 @@ const PersistentPlayer = () => {
         }}
       >
         <Avatar
-          src={currentTrack.image_url || currentTrack.cover_url || currentTrack.image || currentTrack.artwork || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80'}
+          src={
+            (currentTrack.cover || currentTrack.image_url || currentTrack.cover_url || currentTrack.image || currentTrack.artwork || '/default-cover.png')
+              .replace('100x100bb', '300x300bb')
+              .replace('1000x1000bb', '300x300bb')
+          }
+          imgProps={{
+            loading: 'lazy',
+            decoding: 'async',
+            onError: (e) => {
+              e.target.src = '/default-cover.png';
+            },
+          }}
           variant="rounded"
           onClick={() => setIsFullPlayerOpen(true)}
           sx={{
