@@ -25,6 +25,30 @@ export const PlayerProvider = ({ children }) => {
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
 
+  const [recentlyPlayed, setRecentlyPlayed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chillmusic_recently_played');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const addToRecentlyPlayed = (track) => {
+    if (!track || (!track.title && !track.name)) return;
+    const norm = normalizeTrack(track);
+    setRecentlyPlayed((prev) => {
+      const filtered = prev.filter(
+        (item) => String(item.id) !== String(norm.id) && item.title !== norm.title
+      );
+      const updated = [norm, ...filtered].slice(0, 20);
+      try {
+        localStorage.setItem('chillmusic_recently_played', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
   // Auto-Queue Gemini & Expansion Integration
   const [isFetchingAutoQueue, setIsFetchingAutoQueue] = useState(false);
   const [isSmartShuffling, setIsSmartShuffling] = useState(false);
@@ -181,6 +205,8 @@ export const PlayerProvider = ({ children }) => {
     if (!song) return;
 
     const normalizedSong = normalizeTrack(song);
+    addToRecentlyPlayed(normalizedSong);
+
     let targetQueue = newQueue ? newQueue.map(normalizeTrack) : [...queue];
 
     // Find if track is already in targetQueue
@@ -497,6 +523,8 @@ export const PlayerProvider = ({ children }) => {
         removeFromQueue,
         clearQueue,
         geminiSmartShuffle,
+        recentlyPlayed,
+        addToRecentlyPlayed,
       }}
     >
       {children}

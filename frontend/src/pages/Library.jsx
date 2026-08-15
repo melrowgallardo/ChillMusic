@@ -18,7 +18,7 @@ const tabIndexMap = { favorites: 0, playlists: 1, history: 2, downloads: 3 };
 
 const Library = () => {
   const { user } = useAuth();
-  const { playTrack } = usePlayer();
+  const { playTrack, recentlyPlayed } = usePlayer();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const tabParam = searchParams.get('tab');
@@ -84,7 +84,7 @@ const Library = () => {
     loadLibraryData();
   }, [user]);
 
-  if (!user) {
+  if (!user && (!recentlyPlayed || recentlyPlayed.length === 0)) {
     return (
       <Box sx={{ p: 5, textAlign: 'center' }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
@@ -107,15 +107,23 @@ const Library = () => {
     duration: fav.duration || 180,
   }));
 
-  const historyTracks = history.map((h) => ({
-    id: h.song_id || h.id,
-    title: h.song_title || h.title || 'Unknown Title',
-    artist_name: h.artist_name || h.subtitle || 'Artist',
-    album_name: h.album_name || h.album || 'Single',
-    image_url: h.image_url || h.cover_url || h.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80',
-    audio_url: h.audio_url,
-    duration: h.duration || 180,
-  }));
+  const rawHistory = [...(recentlyPlayed || []), ...(history || [])];
+  const seenHistIds = new Set();
+  const historyTracks = [];
+  for (const h of rawHistory) {
+    const hid = h.song_id || h.id;
+    if (!hid || seenHistIds.has(String(hid))) continue;
+    seenHistIds.add(String(hid));
+    historyTracks.push({
+      id: hid,
+      title: h.song_title || h.title || 'Unknown Title',
+      artist_name: h.artist_name || h.subtitle || h.artist || 'Artist',
+      album_name: h.album_name || h.album || 'Single',
+      image_url: h.image_url || h.cover_url || h.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80',
+      audio_url: h.audio_url || h.audioUrl,
+      duration: h.duration || 180,
+    });
+  }
 
   const downloadTracks = downloads.map((d) => ({
     id: d.song_id || d.id,

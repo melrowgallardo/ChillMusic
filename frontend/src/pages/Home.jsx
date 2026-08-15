@@ -16,7 +16,7 @@ import { getHistory } from '../services/firestoreService';
 import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS } from '../services/mockData';
 
 const Home = () => {
-  const { playTrack, currentTrack, isPlaying, togglePlayPause } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlayPause, recentlyPlayed } = usePlayer();
   const [recentTracks, setRecentTracks] = useState([]);
   const [trending, setTrending] = useState(FALLBACK_TRACKS);
   const [youtubeHits, setYoutubeHits] = useState(FALLBACK_TRACKS);
@@ -25,6 +25,8 @@ const Home = () => {
   const [playlists, setPlaylists] = useState(FALLBACK_PLAYLISTS);
   const [artists, setArtists] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const displayedRecent = recentlyPlayed && recentlyPlayed.length > 0 ? recentlyPlayed : recentTracks;
 
   useEffect(() => {
     let isMounted = true;
@@ -271,7 +273,7 @@ const Home = () => {
       ) : null}
 
       {/* Recently Played Section */}
-      {recentTracks.length > 0 && (
+      {displayedRecent.length > 0 && (
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
             <HistoryIcon sx={{ color: 'var(--accent-secondary)' }} />
@@ -280,9 +282,9 @@ const Home = () => {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 2.5, overflowX: 'auto', pb: 2, scrollSnapType: 'x mandatory', '&::-webkit-scrollbar': { display: 'none' }, WebkitOverflowScrolling: 'touch', mx: -2, px: 2 }}>
-            {recentTracks.map((track) => (
+            {displayedRecent.map((track) => (
               <Box key={`recent-${track.id}`} sx={{ minWidth: { xs: 150, sm: 180, md: 200 }, scrollSnapAlign: 'start' }}>
-                <TrackCard track={track} queue={recentTracks} />
+                <TrackCard track={track} queue={displayedRecent} />
               </Box>
             ))}
           </Box>
