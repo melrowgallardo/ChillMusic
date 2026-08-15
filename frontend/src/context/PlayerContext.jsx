@@ -139,7 +139,12 @@ export const PlayerProvider = ({ children }) => {
     audio.volume = volume;
 
     const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleLoadedMetadata = () => setDuration(audio.duration || 0);
+    const handleLoadedMetadata = () => {
+      const realDur = audio.duration;
+      if (realDur && !isNaN(realDur) && isFinite(realDur) && realDur > 0) {
+        setDuration(realDur);
+      }
+    };
     const handleEnded = () => handleTrackEnd();
     const handleError = (e) => {
       console.error('Audio playback error:', e);
@@ -205,9 +210,9 @@ export const PlayerProvider = ({ children }) => {
       });
     }
 
-    // Resolve full-length song stream if track is a 30s preview clip
+    // Resolve full-length audio stream if missing, invalid, or preview URL
     const targetTrack = await resolveFullAudioTrack(track);
-    if (targetTrack && targetTrack.audio_url) {
+    if (targetTrack) {
       setCurrentTrack(targetTrack);
     }
 
@@ -218,22 +223,26 @@ export const PlayerProvider = ({ children }) => {
     audio.removeAttribute('src');
     audio.load();
 
-    const defaultUrl = getFullAudioUrl(targetTrack.audio_url);
+    const rawUrl = targetTrack?.audio_url || targetTrack?.audioUrl || targetTrack?.preview_url || targetTrack?.previewUrl || '';
+    const defaultUrl = getFullAudioUrl(rawUrl);
 
     const startPlay = (urlToPlay) => {
       if (urlToPlay) {
         audio.src = urlToPlay;
         audio.load(); // Dynamically update and reload exact audio URL matching currentTrack.id
-        audio
-          .play()
-          .then(() => {
-            setIsPlaying(true);
-            recordHistory(targetTrack);
-          })
-          .catch((err) => {
-            console.warn('Auto-play error:', err);
-            setIsPlaying(false);
-          });
+
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              recordHistory(targetTrack);
+            })
+            .catch((err) => {
+              console.warn('Browser auto-play restriction caught cleanly:', err);
+              setIsPlaying(false);
+            });
+        }
       }
     };
 
