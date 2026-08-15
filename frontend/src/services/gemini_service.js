@@ -1,22 +1,26 @@
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-export const getAutoQueueRecommendations = async (currentTrack, recentTracks) => {
+export const getAutoQueueRecommendations = async (currentTrack, recentTracks = []) => {
   if (!GEMINI_API_KEY) {
     console.error('Gemini API key is missing. Add VITE_GEMINI_API_KEY to .env');
     return [];
   }
 
-  const currentTrackInfo = currentTrack ? `${currentTrack.title} by ${currentTrack.artist_name}` : 'Unknown';
-  const recentHistory = recentTracks.map(t => `${t.title} by ${t.artist_name}`).join(', ');
+  const currentArtist = currentTrack?.artist_name || 'Unknown Artist';
+  const currentTitle = currentTrack?.title || 'Unknown Title';
+  const currentGenre = currentTrack?.genre || currentTrack?.album_name || '';
+  const currentTrackInfo = `${currentTitle} by ${currentArtist}`;
+  const recentHistory = recentTracks.map((t) => `${t.title} by ${t.artist_name}`).join(', ');
 
   const prompt = `
 You are an expert music recommendation engine.
-Given the currently playing track and a history of recently played tracks, recommend 3 to 5 new tracks that vibe well with them.
-DO NOT recommend any tracks that are already in the recent history.
+Given the currently playing track "${currentTrackInfo}" (Genre: ${currentGenre}) and recent playback history, recommend 3 to 5 new real songs from the SAME artist or closely related artists in the same musical genre.
 
-Currently playing: ${currentTrackInfo}
-Recently played: ${recentHistory}
+CRITICAL INSTRUCTIONS:
+- DO NOT recommend random nature/rain sounds or ambient white noise unless the current track itself is ambient/nature sounds.
+- Keep recommendations strictly aligned with the artist ("${currentArtist}") and musical genre.
+- DO NOT recommend any tracks that are already in the recent history (${recentHistory}).
 
 Return ONLY a strict JSON object with this exact structure:
 {
@@ -37,14 +41,16 @@ Return ONLY a strict JSON object with this exact structure:
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }]
-        }],
+        contents: [
+          {
+            parts: [{ text: prompt }],
+          },
+        ],
         generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.7,
-        }
-      })
+          responseMimeType: 'application/json',
+          temperature: 0.5,
+        },
+      }),
     });
 
     if (!response.ok) {
@@ -53,7 +59,7 @@ Return ONLY a strict JSON object with this exact structure:
 
     const data = await response.json();
     const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
+
     if (resultText) {
       const parsed = JSON.parse(resultText);
       if (parsed && parsed.recommendations) {
@@ -63,9 +69,9 @@ Return ONLY a strict JSON object with this exact structure:
           artist_name: track.artist_name,
           album_name: track.album_name || 'Single',
           duration: track.duration || 180,
-          audio_url: '', // Left empty as instructed
-          image_url: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80', // generic placeholder
-          is_gemini: true
+          audio_url: '',
+          image_url: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500&q=80',
+          is_gemini: true,
         }));
       }
     }

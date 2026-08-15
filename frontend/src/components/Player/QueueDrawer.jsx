@@ -23,7 +23,7 @@ import AudioVisualizer from './AudioVisualizer';
 const QueueDrawer = () => {
   const {
     queue,
-    currentIndex,
+    currentTrack,
     isPlaying,
     isQueueOpen,
     setIsQueueOpen,
@@ -149,14 +149,25 @@ const QueueDrawer = () => {
         ) : (
           <List sx={{ width: '100%', mt: 1, overflowY: 'auto' }}>
             {queue.map((track, idx) => {
-              const isCurrent = idx === currentIndex;
+              const isCurrent = Boolean(
+                currentTrack &&
+                  (String(track.id) === String(currentTrack.id) ||
+                    (track.title &&
+                      currentTrack.title &&
+                      track.title === currentTrack.title &&
+                      track.artist_name === currentTrack.artist_name))
+              );
+
               return (
                 <ListItem
                   key={`${track.id}-${idx}`}
                   secondaryAction={
                     <IconButton
                       edge="end"
-                      onClick={() => removeFromQueue(idx)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromQueue(idx);
+                      }}
                       sx={{ color: 'var(--text-muted)' }}
                     >
                       <CloseIcon fontSize="small" />
