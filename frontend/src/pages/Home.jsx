@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, Grid, Skeleton } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import HistoryIcon from '@mui/icons-material/History';
 import { getTrendingSongs, getNewReleases, getRecommendations, searchPlaylists, searchArtists } from '../services/jamendo';
@@ -8,13 +9,14 @@ import { getYouTubeTrending } from '../services/youtube';
 import TrackCard from '../components/Track/TrackCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
 import ArtistCard from '../components/Artist/ArtistCard';
+import AudioVisualizer from '../components/Player/AudioVisualizer';
 import { usePlayer } from '../context/PlayerContext';
 import { cacheSongsLocally } from '../services/offlineSync';
 import { getHistory } from '../services/firestoreService';
 import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS } from '../services/mockData';
 
 const Home = () => {
-  const { playTrack, currentTrack } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlayPause } = usePlayer();
   const [recentTracks, setRecentTracks] = useState([]);
   const [trending, setTrending] = useState(FALLBACK_TRACKS);
   const [youtubeHits, setYoutubeHits] = useState(FALLBACK_TRACKS);
@@ -61,7 +63,7 @@ const Home = () => {
           if (ytData && ytData.length > 0) {
             setYoutubeHits(ytData);
           }
-          setLoading(false); // Remove main loading spinner early!
+          setLoading(false);
         }
       } catch (err) {
         console.warn('YouTube trending fetch error:', err);
@@ -115,6 +117,19 @@ const Home = () => {
 
   const trackPool = (trending && trending.length > 0) ? trending : ((youtubeHits && youtubeHits.length > 0) ? youtubeHits : FALLBACK_TRACKS);
 
+  const isCurrentHeroTrack = Boolean(
+    currentTrack && heroTrack && String(currentTrack.id) === String(heroTrack.id)
+  );
+  const isBannerPlaying = isCurrentHeroTrack && isPlaying;
+
+  const handleBannerPlayClick = () => {
+    if (isCurrentHeroTrack) {
+      togglePlayPause();
+    } else {
+      playTrack(heroTrack, trackPool, 0);
+    }
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {/* Hero Banner */}
@@ -125,19 +140,32 @@ const Home = () => {
             p: { xs: 3, md: 4 },
             position: 'relative',
             overflow: 'hidden',
-            background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.4) 0%, rgba(6, 182, 212, 0.2) 100%)',
+            background: isBannerPlaying
+              ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.35) 0%, rgba(124, 58, 237, 0.4) 100%)'
+              : 'linear-gradient(135deg, rgba(124, 58, 237, 0.4) 0%, rgba(6, 182, 212, 0.2) 100%)',
             borderRadius: 'var(--radius-lg)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 3,
             flexDirection: { xs: 'column-reverse', md: 'row' },
+            transition: 'background 0.5s ease',
           }}
         >
           <Box sx={{ flex: 1, zIndex: 1 }}>
-            <Typography variant="overline" sx={{ letterSpacing: 3, color: 'var(--accent-secondary)', fontWeight: 700 }}>
-              {currentTrack && heroTrack.id === currentTrack.id ? 'NOW PLAYING' : 'FEATURED TRACK'}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+              <Typography
+                variant="overline"
+                sx={{
+                  letterSpacing: 3,
+                  color: isBannerPlaying ? 'var(--accent-pink)' : 'var(--accent-secondary)',
+                  fontWeight: 700,
+                }}
+              >
+                {isCurrentHeroTrack ? 'NOW PLAYING' : 'FEATURED TRACK'}
+              </Typography>
+              {isBannerPlaying && <AudioVisualizer isPlaying={true} />}
+            </Box>
             <Typography variant="h4" sx={{ fontWeight: 800, my: 1, fontFamily: 'var(--font-heading)' }}>
               {heroTrack.title}
             </Typography>
@@ -147,19 +175,24 @@ const Home = () => {
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant="contained"
-                startIcon={<PlayArrowIcon />}
-                onClick={() => playTrack(heroTrack, trackPool, 0)}
+                startIcon={isBannerPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+                onClick={handleBannerPlayClick}
                 sx={{
-                  backgroundColor: 'var(--accent-primary)',
+                  backgroundColor: isBannerPlaying ? 'var(--accent-pink)' : 'var(--accent-primary)',
                   borderRadius: 'var(--radius-full)',
                   px: 3.5,
                   py: 1,
                   fontWeight: 700,
                   fontSize: '0.95rem',
-                  '&:hover': { backgroundColor: '#6d28d9' },
+                  boxShadow: isBannerPlaying ? '0 0 15px rgba(236, 72, 153, 0.6)' : 'none',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    backgroundColor: isBannerPlaying ? '#db2777' : '#6d28d9',
+                    boxShadow: '0 0 20px var(--accent-glow)',
+                  },
                 }}
               >
-                Play Now
+                {isBannerPlaying ? 'Pause' : (isCurrentHeroTrack ? 'Resume' : 'Play Now')}
               </Button>
               <Button
                 variant="outlined"
@@ -183,17 +216,55 @@ const Home = () => {
           </Box>
 
           <Box
-            component="img"
-            src={heroTrack.image_url || heroTrack.cover_url || heroTrack.image || heroTrack.artwork || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80'}
-            alt={heroTrack.title}
             sx={{
-              width: { xs: 180, sm: 220 },
-              height: { xs: 180, sm: 220 },
-              borderRadius: 'var(--radius-md)',
-              objectFit: 'cover',
-              boxShadow: '0 15px 35px rgba(0, 0, 0, 0.5)',
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-          />
+          >
+            <Box
+              component="img"
+              src={
+                heroTrack.image_url ||
+                heroTrack.cover_url ||
+                heroTrack.image ||
+                heroTrack.artwork ||
+                'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80'
+              }
+              alt={heroTrack.title}
+              sx={{
+                width: { xs: 180, sm: 220 },
+                height: { xs: 180, sm: 220 },
+                borderRadius: 'var(--radius-md)',
+                objectFit: 'cover',
+                boxShadow: isBannerPlaying
+                  ? '0 0 25px rgba(236, 72, 153, 0.6), 0 15px 35px rgba(0, 0, 0, 0.5)'
+                  : '0 15px 35px rgba(0, 0, 0, 0.5)',
+                transition: 'all 0.4s ease',
+              }}
+            />
+            {isBannerPlaying && (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 8,
+                  right: 8,
+                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                  backdropFilter: 'blur(8px)',
+                  borderRadius: 'var(--radius-full)',
+                  px: 1.5,
+                  py: 0.5,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  border: '1px solid rgba(236, 72, 153, 0.5)',
+                }}
+              >
+                <AudioVisualizer isPlaying={true} />
+              </Box>
+            )}
+          </Box>
         </Box>
       ) : loading ? (
         <Skeleton variant="rounded" height={220} sx={{ borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-glass-card)' }} />
