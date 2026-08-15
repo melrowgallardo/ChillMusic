@@ -12,6 +12,9 @@ import Library from './pages/Library';
 import PlaylistDetail from './pages/PlaylistDetail';
 import ArtistDetail from './pages/ArtistDetail';
 import AlbumDetail from './pages/AlbumDetail';
+import Favorites from './pages/Favorites';
+import RecentlyPlayed from './pages/RecentlyPlayed';
+import Downloads from './pages/Downloads';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -29,6 +32,9 @@ function App() {
                   <Route path="search" element={<Search />} />
                   <Route path="explore" element={<Explore />} />
                   <Route path="library" element={<Library />} />
+                  <Route path="favorites" element={<Favorites />} />
+                  <Route path="recently-played" element={<RecentlyPlayed />} />
+                  <Route path="downloads" element={<Downloads />} />
                   <Route path="playlist/:id" element={<PlaylistDetail />} />
                   <Route path="artist/:id" element={<ArtistDetail />} />
                   <Route path="album/:id" element={<AlbumDetail />} />

@@ -39,9 +39,9 @@ const Sidebar = () => {
   ];
 
   const libraryQuickLinks = [
-    { label: 'Favorites', path: '/library?tab=favorites', icon: <FavoriteIcon sx={{ color: 'var(--accent-pink)' }} /> },
-    { label: 'Recently Played', path: '/library?tab=history', icon: <HistoryIcon sx={{ color: 'var(--accent-secondary)' }} /> },
-    { label: 'Downloads', path: '/library?tab=downloads', icon: <DownloadIcon sx={{ color: '#10b981' }} /> },
+    { label: 'Favorites', path: '/favorites', icon: <FavoriteIcon sx={{ color: 'var(--accent-pink)' }} /> },
+    { label: 'Recently Played', path: '/recently-played', icon: <HistoryIcon sx={{ color: 'var(--accent-secondary)' }} /> },
+    { label: 'Downloads', path: '/downloads', icon: <DownloadIcon sx={{ color: '#10b981' }} /> },
   ];
 
   return (
@@ -122,32 +122,40 @@ const Sidebar = () => {
       <Divider sx={{ my: 2, borderColor: 'var(--border-color)' }} />
 
       {/* Library Quick Links */}
+      <Typography variant="caption" sx={{ px: 1.5, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: 1 }}>
+        QUICK ACCESS
+      </Typography>
+      <List sx={{ px: 0, mt: 1 }}>
+        {libraryQuickLinks.map((item) => {
+          const isActive = location.pathname === item.path ||
+            (item.path === '/favorites' && location.search.includes('favorites')) ||
+            (item.path === '/recently-played' && location.search.includes('history')) ||
+            (item.path === '/downloads' && location.search.includes('downloads'));
+          return (
+            <ListItem disablePadding key={item.path} sx={{ mb: 0.5 }}>
+              <ListItemButton
+                onClick={() => navigate(item.path)}
+                sx={{
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: isActive ? 'rgba(124, 58, 237, 0.15)' : 'transparent',
+                  color: isActive ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                  fontWeight: isActive ? 700 : 500,
+                  '&:hover': { backgroundColor: 'var(--bg-glass-card-hover)', color: 'var(--text-primary)' },
+                }}
+              >
+                <ListItemIcon sx={{ color: isActive ? 'var(--accent-primary)' : undefined, minWidth: 40 }}>{item.icon}</ListItemIcon>
+                <ListItemText primary={item.label} />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
+      </List>
+
+      <Divider sx={{ my: 2, borderColor: 'var(--border-color)' }} />
+
+      {/* User Playlists */}
       {user && (
         <>
-          <Typography variant="caption" sx={{ px: 1.5, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: 1 }}>
-            QUICK ACCESS
-          </Typography>
-          <List sx={{ px: 0, mt: 1 }}>
-            {libraryQuickLinks.map((item) => (
-              <ListItem disablePadding key={item.path} sx={{ mb: 0.5 }}>
-                <ListItemButton
-                  onClick={() => navigate(item.path)}
-                  sx={{
-                    borderRadius: 'var(--radius-md)',
-                    color: 'var(--text-secondary)',
-                    '&:hover': { backgroundColor: 'var(--bg-glass-card-hover)', color: 'var(--text-primary)' },
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.label} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-
-          <Divider sx={{ my: 2, borderColor: 'var(--border-color)' }} />
-
-          {/* User Playlists */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1, mb: 1 }}>
             <Typography variant="caption" sx={{ color: 'var(--text-muted)', fontWeight: 700, letterSpacing: 1 }}>
               PLAYLISTS

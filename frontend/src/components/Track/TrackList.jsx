@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import TrackRow from './TrackRow';
 
-const TrackList = ({ tracks = [], onAddToPlaylist }) => {
+const TrackList = ({ tracks = [], onAddToPlaylist, onRemoveTrack }) => {
   if (!tracks.length) {
     return (
       <Box sx={{ p: 4, textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -41,6 +41,7 @@ const TrackList = ({ tracks = [], onAddToPlaylist }) => {
           index={idx}
           queue={tracks}
           onAddToPlaylist={onAddToPlaylist}
+          onRemoveTrack={onRemoveTrack}
         />
       ))}
     </Box>

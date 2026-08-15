@@ -8,6 +8,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import PlaylistAddIcon from '@mui/icons-material/PlaylistAdd';
 import DownloadIcon from '@mui/icons-material/Download';
 import QueueIcon from '@mui/icons-material/Queue';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { usePlayer } from '../../context/PlayerContext';
 import { useAuth } from '../../context/AuthContext';
 import { useOffline } from '../../context/OfflineContext';
@@ -24,7 +25,7 @@ const formatDuration = (secs) => {
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 };
 
-const TrackRow = ({ track, index, queue = [], onAddToPlaylist }) => {
+const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) => {
   const { playTrack, currentTrack, isPlaying, togglePlayPause, addToQueue } = usePlayer();
   const { user } = useAuth();
   const { isOnline } = useOffline();
@@ -247,6 +248,19 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist }) => {
             <MenuItem onClick={handleDownload}>
               <ListItemIcon><DownloadIcon fontSize="small" /></ListItemIcon>
               <ListItemText>Download Track</ListItemText>
+            </MenuItem>
+          )}
+
+          {onRemoveTrack && (
+            <MenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                handleMenuClose();
+                onRemoveTrack(track);
+              }}
+            >
+              <ListItemIcon><DeleteOutlineIcon fontSize="small" color="error" /></ListItemIcon>
+              <ListItemText sx={{ color: '#ef4444' }}>Remove</ListItemText>
             </MenuItem>
           )}
         </Menu>
