@@ -103,6 +103,9 @@ const Login = () => {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      // Force account selector to prevent silent cache hangs
+      provider.setCustomParameters({ prompt: 'select_account' });
+
       const result = await signInWithPopup(auth, provider);
       const details = getAdditionalUserInfo(result);
       const user = result.user;
@@ -112,28 +115,33 @@ const Login = () => {
       const userSnap = await getDoc(userDocRef);
 
       if (details?.isNewUser || !userSnap.exists()) {
-        // Account is not registered yet!
+        // Clean up: sign out and delete new auth record
         await signOut(auth);
-        // Delete transient auth user if newly created
         try {
           await user.delete();
         } catch (e) {}
 
-        const msg = '⚠️ No account found with this Google email. Please create an account first on the Sign Up page.';
-        alert(msg);
-        setError('No account found with this Google email. Please sign up first.');
+        setLoading(false);
+        const warnMsg = '⚠️ This Google account is not registered yet. Please go to Sign Up first to create your account.';
+        setError(warnMsg);
+        setToast({ open: true, message: warnMsg, severity: 'error' });
+        alert(warnMsg);
         return;
       }
 
       // Registered user: Proceed with login
       console.log('Login successful:', user);
+      setLoading(false);
       navigate('/');
     } catch (err) {
-      console.error('Google Auth error:', err);
+      console.error('Google Sign In Error:', err);
       if (err.code !== 'auth/popup-closed-by-user') {
-        setError(formatErrorMessage(err));
+        const errMsg = formatErrorMessage(err);
+        setError(errMsg);
+        setToast({ open: true, message: errMsg, severity: 'error' });
       }
     } finally {
+      // ALWAYS reset loading state to avoid infinite loader
       setLoading(false);
     }
   };
@@ -235,7 +243,18 @@ const Login = () => {
             </Box>
 
             {error && (
-              <Alert severity="error" sx={{ width: '100%', borderRadius: 'var(--radius-sm)' }}>
+              <Alert
+                severity="error"
+                sx={{
+                  width: '100%',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  color: '#f87171',
+                  border: '1px solid rgba(239, 68, 68, 0.4)',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                }}
+              >
                 {error}
               </Alert>
             )}
