@@ -38,7 +38,10 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
     }
   }, [user, track?.id]);
 
-  const isCurrent = currentTrack && currentTrack.id === track.id;
+  const isCurrent =
+    currentTrack &&
+    (String(currentTrack.id) === String(track.id) ||
+      (currentTrack.title === track.title && (currentTrack.artist_name === track.artist_name || currentTrack.artist === track.artist)));
 
   const handleRowClick = () => {
     if (isCurrent) {
@@ -148,7 +151,11 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, overflow: 'hidden' }}>
         <Box sx={{ minWidth: 28, textAlign: 'center', color: 'var(--text-muted)' }}>
           {isCurrent ? (
-            <AudioVisualizer isPlaying={isPlaying} />
+            isPlaying ? (
+              <AudioVisualizer isPlaying={isPlaying} />
+            ) : (
+              <PlayArrowIcon fontSize="small" sx={{ color: 'var(--accent-primary)' }} />
+            )
           ) : (
             <>
               <Typography variant="body2" className="track-idx" sx={{ fontWeight: 600 }}>

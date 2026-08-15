@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, Avatar } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { getAlbumDetails } from '../services/jamendo';
@@ -13,7 +14,7 @@ const AlbumDetail = () => {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { playTrack } = usePlayer();
+  const { currentTrack, isPlaying, togglePlayPause, playTrack } = usePlayer();
 
   const [album, setAlbum] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -124,9 +125,21 @@ const AlbumDetail = () => {
   const releaseYear = album.releaseDate || album.releasedate || album.release_date || 'Recent';
   const tracksList = album.tracks || [];
 
-  const handlePlayAlbum = () => {
+  const isCurrentAlbum = tracksList.some(
+    (t) => String(t.id) === String(currentTrack?.id) || (t.title === currentTrack?.title && t.artist_name === currentTrack?.artist_name)
+  );
+  const isCurrentAlbumPlaying = isPlaying && isCurrentAlbum;
+
+  const handleTogglePlayAlbum = () => {
     if (!tracksList || tracksList.length === 0) return;
-    playTrack(tracksList[0], tracksList, 0);
+
+    if (isCurrentAlbumPlaying) {
+      togglePlayPause();
+    } else if (isCurrentAlbum) {
+      togglePlayPause();
+    } else {
+      playTrack(tracksList[0], tracksList, 0);
+    }
   };
 
   return (
@@ -152,11 +165,11 @@ const AlbumDetail = () => {
           {tracksList.length > 0 && (
             <Button
               variant="contained"
-              startIcon={<PlayArrowIcon />}
-              onClick={handlePlayAlbum}
-              sx={{ backgroundColor: 'var(--accent-primary)', borderRadius: 'var(--radius-full)', px: 4, py: 1, fontWeight: 700 }}
+              startIcon={isCurrentAlbumPlaying ? <PauseIcon /> : <PlayArrowIcon />}
+              onClick={handleTogglePlayAlbum}
+              sx={{ backgroundColor: 'var(--accent-primary)', borderRadius: 'var(--radius-full)', px: 4, py: 1, fontWeight: 700, '&:hover': { backgroundColor: '#6d28d9' } }}
             >
-              Play Album
+              {isCurrentAlbumPlaying ? 'PAUSE' : isCurrentAlbum ? 'RESUME' : 'PLAY ALBUM'}
             </Button>
           )}
         </Box>
