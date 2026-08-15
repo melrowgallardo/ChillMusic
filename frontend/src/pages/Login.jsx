@@ -19,8 +19,10 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
+  getAdditionalUserInfo,
+  signOut,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" style={{ marginRight: 10 }}>
@@ -102,18 +104,29 @@ const Login = () => {
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
+      const details = getAdditionalUserInfo(result);
       const user = result.user;
 
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          username: user.displayName || user.email.split('@')[0],
-          email: user.email,
-          photoURL: user.photoURL || '',
-          createdAt: new Date(),
-        });
+      // Check Firestore user profile existence
+      const userDocRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userDocRef);
+
+      if (details?.isNewUser || !userSnap.exists()) {
+        // Account is not registered yet!
+        await signOut(auth);
+        // Delete transient auth user if newly created
+        try {
+          await user.delete();
+        } catch (e) {}
+
+        const msg = '⚠️ No account found with this Google email. Please create an account first on the Sign Up page.';
+        alert(msg);
+        setError('No account found with this Google email. Please sign up first.');
+        return;
       }
+
+      // Registered user: Proceed with login
+      console.log('Login successful:', user);
       navigate('/');
     } catch (err) {
       console.error('Google Auth error:', err);
