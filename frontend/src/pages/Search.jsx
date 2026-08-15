@@ -8,9 +8,35 @@ import ArtistCard from '../components/Artist/ArtistCard';
 import AlbumCard from '../components/Album/AlbumCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
-import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ARTISTS, FALLBACK_ALBUMS } from '../services/mockData';
+import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ALBUMS } from '../services/mockData';
 
 const GENRE_TAGS = ['Chill', 'Lofi', 'Ambient', 'Electronic', 'Jazz', 'Rock', 'Pop', 'Acoustic', 'Piano', 'Hip Hop'];
+
+const extractArtists = (songsList = [], albumsList = []) => {
+  const map = new Map();
+  [...songsList, ...albumsList].forEach((item) => {
+    if (!item) return;
+    const name = (item.artist_name || item.artist || item.primaryArtists || '').trim();
+    if (!name || name === 'Various Artists' || name === 'Unknown Artist') return;
+    const key = name.toLowerCase();
+    const cover = item.image_url || item.cover_url || item.coverUrl || item.image || item.artwork;
+
+    if (!map.has(key)) {
+      map.set(key, {
+        id: `ext_art_${key.replace(/[^a-z0-9]/g, '_')}`,
+        name: name,
+        imageUrl: cover || '',
+        image_url: cover || '',
+        cover_url: cover || '',
+        image: cover || '',
+        genres: item.genre || item.genres || 'Artist',
+        followers: null,
+        type: 'Artist',
+      });
+    }
+  });
+  return Array.from(map.values());
+};
 
 const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -60,18 +86,28 @@ const Search = () => {
 
       if (currentReq === searchReqId.current) {
         if (data) {
-          setSongs(data.songs && data.songs.length > 0 ? data.songs : FALLBACK_TRACKS);
-          setArtists(data.artists && data.artists.length > 0 ? data.artists : FALLBACK_ARTISTS);
-          setAlbums(data.albums && data.albums.length > 0 ? data.albums : FALLBACK_ALBUMS);
-          setPlaylists(data.playlists && data.playlists.length > 0 ? data.playlists : FALLBACK_PLAYLISTS);
+          const dynamicSongs = data.songs && data.songs.length > 0 ? data.songs : FALLBACK_TRACKS;
+          let dynamicArtists = data.artists && Array.isArray(data.artists) ? data.artists : [];
+          const dynamicAlbums = data.albums && data.albums.length > 0 ? data.albums : FALLBACK_ALBUMS;
+          const dynamicPlaylists = data.playlists && data.playlists.length > 0 ? data.playlists : FALLBACK_PLAYLISTS;
+
+          if (dynamicArtists.length === 0 && (dynamicSongs.length > 0 || dynamicAlbums.length > 0)) {
+            dynamicArtists = extractArtists(dynamicSongs, dynamicAlbums);
+          }
+
+          setSongs(dynamicSongs);
+          setArtists(dynamicArtists);
+          setAlbums(dynamicAlbums);
+          setPlaylists(dynamicPlaylists);
         } else {
           // Timeout occurred
           const matchedSongs = FALLBACK_TRACKS.filter(t =>
             t.title.toLowerCase().includes(term.toLowerCase()) ||
             t.artist_name.toLowerCase().includes(term.toLowerCase())
           );
-          setSongs(matchedSongs.length > 0 ? matchedSongs : FALLBACK_TRACKS);
-          setArtists(FALLBACK_ARTISTS);
+          const fallbackSongs = matchedSongs.length > 0 ? matchedSongs : FALLBACK_TRACKS;
+          setSongs(fallbackSongs);
+          setArtists(extractArtists(fallbackSongs, FALLBACK_ALBUMS));
           setAlbums(FALLBACK_ALBUMS);
           setPlaylists(FALLBACK_PLAYLISTS);
         }
@@ -80,7 +116,7 @@ const Search = () => {
       console.error('Search failed:', err);
       if (currentReq === searchReqId.current) {
         setSongs(FALLBACK_TRACKS);
-        setArtists(FALLBACK_ARTISTS);
+        setArtists(extractArtists(FALLBACK_TRACKS, FALLBACK_ALBUMS));
         setAlbums(FALLBACK_ALBUMS);
         setPlaylists(FALLBACK_PLAYLISTS);
       }

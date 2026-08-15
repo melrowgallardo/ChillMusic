@@ -11,7 +11,7 @@ import ArtistCard from '../components/Artist/ArtistCard';
 import { usePlayer } from '../context/PlayerContext';
 import { cacheSongsLocally } from '../services/offlineSync';
 import { getHistory } from '../services/firestoreService';
-import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ARTISTS } from '../services/mockData';
+import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS } from '../services/mockData';
 
 const Home = () => {
   const { playTrack, currentTrack } = usePlayer();
@@ -21,7 +21,7 @@ const Home = () => {
   const [newReleases, setNewReleases] = useState(FALLBACK_TRACKS);
   const [recommendations, setRecommendations] = useState(FALLBACK_TRACKS);
   const [playlists, setPlaylists] = useState(FALLBACK_PLAYLISTS);
-  const [artists, setArtists] = useState(FALLBACK_ARTISTS);
+  const [artists, setArtists] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -87,7 +87,7 @@ const Home = () => {
           getNewReleases(10).catch(() => FALLBACK_TRACKS),
           getRecommendations('chill', 10).catch(() => FALLBACK_TRACKS),
           searchPlaylists('chill', 6).catch(() => FALLBACK_PLAYLISTS),
-          searchArtists('lofi', 6).catch(() => FALLBACK_ARTISTS),
+          searchArtists('lofi', 6).catch(() => []),
         ]);
 
         if (isMounted) {

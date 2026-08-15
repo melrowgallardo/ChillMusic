@@ -127,63 +127,7 @@ export const FALLBACK_PLAYLISTS = [
   },
 ];
 
-export const FALLBACK_ARTISTS = [
-  {
-    id: 'art_twice',
-    name: 'TWICE',
-    imageUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
-    image_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
-    image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
-    genres: 'K-Pop / Pop',
-    followers: '22.5M Fans',
-    type: 'Artist',
-  },
-  {
-    id: 'art_bts',
-    name: 'BTS',
-    imageUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
-    image_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
-    image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80',
-    genres: 'K-Pop / Pop',
-    followers: '50.2M Fans',
-    type: 'Artist',
-  },
-  {
-    id: 'art_haddaway',
-    name: 'Haddaway',
-    imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
-    image_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
-    image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
-    genres: 'Eurodance / Dance',
-    followers: '5.4M Fans',
-    type: 'Artist',
-  },
-  {
-    id: 'art_bruno_mars',
-    name: 'Bruno Mars',
-    imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
-    image_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
-    image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80',
-    genres: 'Pop / R&B / Funk',
-    followers: '42.8M Fans',
-    type: 'Artist',
-  },
-  {
-    id: 'art_exo',
-    name: 'EXO',
-    imageUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&q=80',
-    image_url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&q=80',
-    image: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&q=80',
-    genres: 'K-Pop / Pop',
-    followers: '18.9M Fans',
-    type: 'Artist',
-  },
-];
+export const FALLBACK_ARTISTS = [];
 
 export const FALLBACK_ALBUMS = [
   {

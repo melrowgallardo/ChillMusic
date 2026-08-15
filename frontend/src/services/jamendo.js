@@ -1,5 +1,5 @@
 import api from './api';
-import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ARTISTS } from './mockData';
+import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS } from './mockData';
 
 // Helper to prevent browser fetch calls from hanging indefinitely
 const fetchWithTimeout = async (url, timeoutMs = 8000) => {
@@ -8,45 +8,54 @@ const fetchWithTimeout = async (url, timeoutMs = 8000) => {
   try {
     const res = await fetch(url, { signal: controller.signal });
     return res;
+  } catch (err) {
+    throw err;
   } finally {
     clearTimeout(timer);
   }
 };
 
-const fetchProxyJson = async (url, timeoutMs = 8000) => {
-  // 1. Try Codetabs CORS proxy (bypasses browser CORS cleanly)
+const FAST_SEARCH_CACHE = new Map();
+const CACHE_TTL = 300000;
+
+// Helper to fetch audio stream URL for fallback sources
+export const resolveFallbackAudio = async (songId) => {
+  if (FAST_SEARCH_CACHE.has(songId)) {
+    const item = FAST_SEARCH_CACHE.get(songId);
+    if (item.audio_url && !isPreviewUrl(item.audio_url)) {
+      return item.audio_url;
+    }
+  }
+
   try {
-    const res = await fetchWithTimeout(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, timeoutMs);
-    if (res.ok) {
-      const json = await res.json();
-      if (json) return json;
+    const response = await api.get(`/songs/${songId}/stream-url`);
+    if (response.data && response.data.stream_url) {
+      return response.data.stream_url;
     }
   } catch (e1) {}
 
-  // 2. Try AllOrigins GET proxy
   try {
-    const res = await fetchWithTimeout(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, timeoutMs);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.contents) {
-        return typeof data.contents === 'string' ? JSON.parse(data.contents) : data.contents;
-      }
+    const response = await api.get(`/songs/${songId}`);
+    if (response.data && (response.data.audio_url || response.data.stream_url)) {
+      const url = response.data.audio_url || response.data.stream_url;
+      if (!isPreviewUrl(url)) return url;
     }
   } catch (e2) {}
 
-  // 3. Try Direct fetch
   try {
-    const res = await fetchWithTimeout(url, timeoutMs);
-    if (res.ok) {
-      return await res.json();
+    const searchRes = await api.get(`/search?q=${encodeURIComponent(songId)}&limit=1`);
+    if (searchRes.data && searchRes.data.songs && searchRes.data.songs.length > 0) {
+      const song = searchRes.data.songs[0];
+      const url = song.audio_url || song.stream_url;
+      if (url && !isPreviewUrl(url)) return url;
     }
   } catch (e3) {}
 
-  // 4. Try CorsProxy.io
   try {
-    const res = await fetchWithTimeout(`https://corsproxy.io/?${encodeURIComponent(url)}`, timeoutMs);
-    if (res.ok) {
-      return await res.json();
+    const ytRes = await api.get(`/youtube/search?q=${encodeURIComponent(songId)}&limit=1`);
+    if (ytRes.data && ytRes.data.length > 0) {
+      const url = ytRes.data[0].audio_url || ytRes.data[0].stream_url;
+      if (url && !isPreviewUrl(url)) return url;
     }
   } catch (e4) {}
 
@@ -58,7 +67,7 @@ import { isPreviewUrl } from './audioResolver';
 // Resilient, fast public music search fallback (YouTube full songs + Audius + JioSaavn + Jamendo)
 const fallbackUnifiedSearch = async (query, limit = 20) => {
   if (!query || !query.trim()) {
-    return { songs: FALLBACK_TRACKS, artists: FALLBACK_ARTISTS, albums: [], playlists: FALLBACK_PLAYLISTS };
+    return { songs: FALLBACK_TRACKS, artists: [], albums: [], playlists: FALLBACK_PLAYLISTS };
   }
 
   const q = query.trim();
@@ -421,23 +430,74 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
 
     const combinedAlbums = [...iTunesAlbums, ...saavnAlbums];
     const rawArtists = [...saavnArtists, ...deezerArtists, ...iTunesArtists];
-    const seenArtNames = new Set();
-    const combinedArtists = [];
+
+    const artistMap = new Map();
+    [...combinedSongs, ...combinedAlbums].forEach((item) => {
+      if (!item) return;
+      const name = (item.artist_name || item.artist || item.primaryArtists || '').trim();
+      if (!name || name === 'Various Artists' || name === 'Unknown Artist') return;
+      const key = name.toLowerCase();
+      const cover = item.image_url || item.cover_url || item.coverUrl || item.image || item.artwork;
+
+      if (!artistMap.has(key)) {
+        artistMap.set(key, {
+          id: `ext_art_${key.replace(/[^a-z0-9]/g, '_')}`,
+          name: name,
+          imageUrl: cover || '',
+          image_url: cover || '',
+          cover_url: cover || '',
+          image: cover || '',
+          genres: item.genre || item.genres || 'Artist',
+          followers: null,
+          type: 'Artist',
+          source: item.source || 'extracted',
+        });
+      }
+    });
+
     for (const art of rawArtists) {
-      if (art && art.name && !seenArtNames.has(art.name.toLowerCase())) {
-        seenArtNames.add(art.name.toLowerCase());
-        combinedArtists.push(art);
+      if (!art || !art.name) continue;
+      const name = art.name.trim();
+      if (!name || name === 'Various Artists' || name === 'Unknown Artist') continue;
+      const key = name.toLowerCase();
+
+      if (artistMap.has(key)) {
+        const existing = artistMap.get(key);
+        if (art.imageUrl && !art.imageUrl.includes('unsplash') && art.imageUrl !== '') {
+          existing.imageUrl = art.imageUrl;
+          existing.image_url = art.imageUrl;
+          existing.cover_url = art.imageUrl;
+          existing.image = art.imageUrl;
+        }
+        if (art.followers) existing.followers = art.followers;
+        if (art.genres && art.genres !== 'Artist') existing.genres = art.genres;
+        if (art.id) existing.id = art.id;
+      } else {
+        artistMap.set(key, {
+          id: art.id || `art_${key.replace(/[^a-z0-9]/g, '_')}`,
+          name: name,
+          imageUrl: art.imageUrl || art.image_url || art.cover_url || art.image || '',
+          image_url: art.imageUrl || art.image_url || art.cover_url || art.image || '',
+          cover_url: art.imageUrl || art.image_url || art.cover_url || art.image || '',
+          image: art.imageUrl || art.image_url || art.cover_url || art.image || '',
+          genres: art.genres || 'Artist',
+          followers: art.followers || null,
+          type: 'Artist',
+          source: art.source || 'api',
+        });
       }
     }
 
+    const combinedArtists = Array.from(artistMap.values());
+
     const songs = combinedSongs.length > 0 ? combinedSongs : FALLBACK_TRACKS;
-    const artists = combinedArtists.length > 0 ? combinedArtists : FALLBACK_ARTISTS;
+    const artists = combinedArtists;
     const albums = combinedAlbums.length > 0 ? combinedAlbums : FALLBACK_ALBUMS;
     const playlists = FALLBACK_PLAYLISTS;
 
     return { songs, artists, albums, playlists };
   } catch (e) {
-    return { songs: FALLBACK_TRACKS, artists: FALLBACK_ARTISTS, albums: FALLBACK_ALBUMS, playlists: FALLBACK_PLAYLISTS };
+    return { songs: FALLBACK_TRACKS, artists: [], albums: FALLBACK_ALBUMS, playlists: FALLBACK_PLAYLISTS };
   }
 };
 
@@ -500,7 +560,7 @@ export const searchUnified = async (query, limit = 20, source = 'all') => {
   }
   const res = await fallbackUnifiedSearch(query, limit);
   if (res.songs && res.songs.length > 0) return res;
-  return { songs: FALLBACK_TRACKS, artists: FALLBACK_ARTISTS, albums: [], playlists: FALLBACK_PLAYLISTS };
+  return { songs: FALLBACK_TRACKS, artists: [], albums: [], playlists: FALLBACK_PLAYLISTS };
 };
 
 export const searchArtists = async (query, limit = 20) => {
@@ -512,7 +572,7 @@ export const searchArtists = async (query, limit = 20) => {
   }
   const fallback = await fallbackUnifiedSearch(query, limit);
   if (fallback.artists && fallback.artists.length > 0) return fallback.artists;
-  return FALLBACK_ARTISTS;
+  return [];
 };
 
 export const searchAlbums = async (query, limit = 20) => {
