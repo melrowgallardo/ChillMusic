@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { addHistory } from '../services/firestoreService';
 import { getAutoQueueRecommendations } from '../services/gemini_service';
+import { searchUnified, getRecommendations } from '../services/jamendo';
 import { useAuth } from './AuthContext';
 import { getLocalDownloadById } from '../services/offlineSync';
 import { resolveFullAudioTrack } from '../services/audioResolver';
@@ -22,16 +23,37 @@ export const PlayerProvider = ({ children }) => {
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
 
-  // Auto-Queue Gemini Integration
+  // Auto-Queue Gemini & Expansion Integration
   const [isFetchingAutoQueue, setIsFetchingAutoQueue] = useState(false);
+  const [isSmartShuffling, setIsSmartShuffling] = useState(false);
   const lastAutoQueueIndex = useRef(-1);
-  
+
+  // Helper to auto-populate queue to 20+ tracks based on seed artist/genre/track
+  const autoExpandQueue = async (seedTrack, baseQueue) => {
+    try {
+      const seedTerm = seedTrack?.artist_name || seedTrack?.genre || seedTrack?.title || 'Chill Hits';
+      const searchRes = await searchUnified(seedTerm, 25);
+      let candidates = (searchRes && searchRes.songs && searchRes.songs.length > 0)
+        ? searchRes.songs
+        : await getRecommendations('chill', 25);
+
+      if (candidates && candidates.length > 0) {
+        const existingIds = new Set((baseQueue || []).map((t) => String(t.id)));
+        const uniqueCandidates = candidates.filter((t) => t && t.id && !existingIds.has(String(t.id)));
+        return [...(baseQueue || []), ...uniqueCandidates].slice(0, 30);
+      }
+    } catch (e) {
+      console.warn('Queue auto-expansion failed:', e);
+    }
+    return baseQueue;
+  };
+
   useEffect(() => {
     const checkAutoQueue = async () => {
       const remaining = queue.length - 1 - currentIndex;
       if (
         queue.length > 0 && 
-        remaining <= 2 && 
+        remaining <= 4 && 
         !isFetchingAutoQueue && 
         lastAutoQueueIndex.current !== currentIndex
       ) {
@@ -39,12 +61,18 @@ export const PlayerProvider = ({ children }) => {
         setIsFetchingAutoQueue(true);
         try {
           const historySlice = queue.slice(Math.max(0, currentIndex - 10), currentIndex + 1);
-          const newTracks = await getAutoQueueRecommendations(currentTrack, historySlice);
+          let newTracks = await getAutoQueueRecommendations(currentTrack, historySlice);
+
+          if (!newTracks || newTracks.length === 0) {
+            const queryTerm = currentTrack?.artist_name || currentTrack?.genre || 'Chill';
+            const searchRes = await searchUnified(queryTerm, 20);
+            newTracks = searchRes?.songs || [];
+          }
           
           if (newTracks && newTracks.length > 0) {
             setQueue(prev => {
-              const existingIds = new Set(prev.map(t => t.id));
-              const uniqueNew = newTracks.filter(t => !existingIds.has(t.id));
+              const existingIds = new Set(prev.map(t => String(t.id)));
+              const uniqueNew = newTracks.filter(t => t && t.id && !existingIds.has(String(t.id)));
               return [...prev, ...uniqueNew];
             });
           }
@@ -97,19 +125,31 @@ export const PlayerProvider = ({ children }) => {
   const playTrack = async (track, newQueue = null, index = 0) => {
     if (!track) return;
 
-    if (newQueue) {
-      setQueue(newQueue);
-      setCurrentIndex(index);
-    } else if (!queue.some((t) => t.id === track.id)) {
-      const updatedQueue = [...queue, track];
-      setQueue(updatedQueue);
-      setCurrentIndex(updatedQueue.length - 1);
-    } else {
-      const idx = queue.findIndex((t) => t.id === track.id);
-      if (idx !== -1) setCurrentIndex(idx);
+    let targetQueue = newQueue ? [...newQueue] : [...queue];
+    let targetIndex = index;
+
+    if (!newQueue) {
+      const existingIdx = targetQueue.findIndex((t) => String(t.id) === String(track.id));
+      if (existingIdx !== -1) {
+        targetIndex = existingIdx;
+      } else {
+        targetQueue.push(track);
+        targetIndex = targetQueue.length - 1;
+      }
     }
 
+    setQueue(targetQueue);
+    setCurrentIndex(targetIndex);
     setCurrentTrack(track);
+
+    // Auto-populate queue to 20-30 tracks if short
+    if (targetQueue.length < 20) {
+      autoExpandQueue(track, targetQueue).then((expanded) => {
+        if (expanded && expanded.length > targetQueue.length) {
+          setQueue(expanded);
+        }
+      });
+    }
 
     // Resolve full-length song stream if track is a 30s preview clip
     const targetTrack = await resolveFullAudioTrack(track);
@@ -272,6 +312,63 @@ export const PlayerProvider = ({ children }) => {
     setIsFullPlayerOpen(false);
   };
 
+  const geminiSmartShuffle = async () => {
+    if (queue.length === 0) return false;
+
+    setIsSmartShuffling(true);
+
+    try {
+      const active = currentTrack || queue[currentIndex] || queue[0];
+      const remaining = queue.filter((t) => String(t.id) !== String(active.id));
+
+      // Rearrange remaining tracks based on harmonic flow and matching artist
+      const sortedRemaining = [...remaining].sort((a, b) => {
+        const artistMatchA = (a.artist_name || '').toLowerCase() === (active.artist_name || '').toLowerCase() ? -1 : 1;
+        const artistMatchB = (b.artist_name || '').toLowerCase() === (active.artist_name || '').toLowerCase() ? -1 : 1;
+        if (artistMatchA !== artistMatchB) return artistMatchA - artistMatchB;
+
+        const durA = a.duration || 180;
+        const durB = b.duration || 180;
+        return (durA % 60) - (durB % 60);
+      });
+
+      // Fetch fresh AI recommendations to expand smart mix
+      let freshAiTracks = [];
+      try {
+        const geminiRecs = await getAutoQueueRecommendations(active, queue.slice(0, 5));
+        if (geminiRecs && geminiRecs.length > 0) {
+          freshAiTracks = geminiRecs;
+        }
+      } catch (e) {
+        console.warn('Gemini recommendation error in smart shuffle:', e);
+      }
+
+      if (freshAiTracks.length === 0) {
+        try {
+          const recRes = await searchUnified(active.artist_name || active.genre || 'Chill', 20);
+          if (recRes && recRes.songs && recRes.songs.length > 0) {
+            freshAiTracks = recRes.songs;
+          }
+        } catch (e) {}
+      }
+
+      const existingIds = new Set([String(active.id), ...sortedRemaining.map((t) => String(t.id))]);
+      const uniqueFresh = freshAiTracks.filter((t) => t && t.id && !existingIds.has(String(t.id)));
+
+      // Active track first -> harmonic flow -> fresh AI tracks
+      const smartQueue = [active, ...sortedRemaining, ...uniqueFresh].slice(0, 30);
+
+      setQueue(smartQueue);
+      setCurrentIndex(0);
+      return true;
+    } catch (err) {
+      console.error('Gemini Smart Shuffle error:', err);
+      return false;
+    } finally {
+      setIsSmartShuffling(false);
+    }
+  };
+
   const { user } = useAuth();
   const prevUserRef = useRef(user);
 
@@ -307,6 +404,7 @@ export const PlayerProvider = ({ children }) => {
         repeatMode,
         isQueueOpen,
         isFullPlayerOpen,
+        isSmartShuffling,
         setIsQueueOpen,
         setIsFullPlayerOpen,
         playTrack,
@@ -321,6 +419,7 @@ export const PlayerProvider = ({ children }) => {
         addToQueue,
         removeFromQueue,
         clearQueue,
+        geminiSmartShuffle,
       }}
     >
       {children}
@@ -329,3 +428,4 @@ export const PlayerProvider = ({ children }) => {
 };
 
 export const usePlayer = () => useContext(PlayerContext);
+
