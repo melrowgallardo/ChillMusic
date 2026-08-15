@@ -6,6 +6,7 @@ import {
   Button,
   Paper,
   Alert,
+  Snackbar,
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import LockResetIcon from '@mui/icons-material/LockReset';
@@ -48,6 +49,9 @@ const Login = () => {
   const [resetError, setResetError] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
+  // Toast feedback state
+  const [toast, setToast] = useState({ open: false, message: '', severity: 'info' });
+
   const handleSubmitLogin = async (e) => {
     e.preventDefault();
     setError('');
@@ -81,7 +85,9 @@ const Login = () => {
   const handleSendResetEmail = async (e) => {
     e.preventDefault();
     if (!resetEmail.trim()) {
-      setResetError('Please enter your email address.');
+      const errMsg = 'Please enter your email address.';
+      setResetError(errMsg);
+      setToast({ open: true, message: errMsg, severity: 'error' });
       return;
     }
     setResetError('');
@@ -90,16 +96,21 @@ const Login = () => {
 
     try {
       await sendPasswordResetEmail(auth, resetEmail.trim());
-      setResetSuccess('A password reset link has been sent to your email. Please check your inbox or spam folder.');
+      const succMsg = 'A password reset link has been sent to your email. Please check your inbox or spam folder.';
+      setResetSuccess(succMsg);
+      setToast({ open: true, message: 'Password reset link sent to your inbox!', severity: 'success' });
     } catch (err) {
       console.error('Password reset error:', err);
+      let errMsg = 'Failed to send password reset email.';
       if (err.code === 'auth/user-not-found') {
-        setResetError('No user found with this email address.');
+        errMsg = 'No user found with this email address.';
       } else if (err.code === 'auth/invalid-email') {
-        setResetError('Invalid email address format.');
-      } else {
-        setResetError(err.message || 'Failed to send password reset email.');
+        errMsg = 'Invalid email address format.';
+      } else if (err.message) {
+        errMsg = err.message;
       }
+      setResetError(errMsg);
+      setToast({ open: true, message: errMsg, severity: 'error' });
     } finally {
       setResetLoading(false);
     }
@@ -288,6 +299,23 @@ const Login = () => {
           </>
         )}
       </Paper>
+
+      {/* Snackbar Toast Feedback */}
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={6000}
+        onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setToast((prev) => ({ ...prev, open: false }))}
+          severity={toast.severity}
+          variant="filled"
+          sx={{ width: '100%', fontWeight: 600, borderRadius: 'var(--radius-md)' }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
