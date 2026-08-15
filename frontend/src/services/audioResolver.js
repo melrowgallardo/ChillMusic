@@ -136,16 +136,77 @@ export const filterAndRankAudioCandidates = (candidates, originalTitle, original
  * Uses YouTube Audio Stream Resolvers / Piped / Invidious / Backend yt_dlp stream / JioSaavn CDN / Audius
  * Completely replaces 30-second iTunes preview URLs with full-length streaming.
  */
+/**
+ * Helper to fetch YouTube video ID for a track.
+ * Queries public search scraper (e.g. https://pipedapi.kavin.rocks/search?q=${query}&filter=music_songs),
+ * Invidious, and fetchYouTubePublic.
+ */
+export const getYoutubeTrack = async (title, artist) => {
+  const query = artist ? `${artist} - ${title} official audio` : `${title} official audio`;
+  const pipedEndpoints = [
+    `https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_songs`,
+    `https://pipedapi.tokhmi.xyz/search?q=${encodeURIComponent(query)}&filter=music_songs`,
+    `https://api.piped.privacydev.net/search?q=${encodeURIComponent(query)}&filter=music_songs`,
+  ];
+
+  for (const url of pipedEndpoints) {
+    try {
+      const res = await fetchWithTimeout(url, 4000);
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items || (Array.isArray(data) ? data : []);
+        if (items.length > 0) {
+          const first = items[0];
+          let vid = first.url ? first.url.replace('/watch?v=', '').split('&')[0] : first.id || first.videoId;
+          if (vid) {
+            return {
+              videoId: vid,
+              youtubeId: vid,
+              duration: parseInt(first.duration || first.lengthSeconds || 210, 10),
+              title: first.title || title,
+              artist: first.uploaderName || artist,
+            };
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Fallback to fetchYouTubePublic
+  try {
+    const tracks = await fetchYouTubePublic(query, 5);
+    if (tracks && tracks.length > 0) {
+      const best = tracks[0];
+      const vid = best.id ? String(best.id).replace('yt_', '') : null;
+      if (vid) {
+        return {
+          videoId: vid,
+          youtubeId: vid,
+          duration: best.duration || 210,
+          title: best.title || title,
+          artist: best.artist || artist,
+        };
+      }
+    }
+  } catch (e) {}
+
+  return null;
+};
+
 export const resolveFullAudioTrack = async (track) => {
   if (!track) return track;
 
-  const existingUrl = track.audio_url || track.audioUrl;
-  const existingYtId =
-    track.youtubeId ||
+  let existingUrl = track.audio_url || track.audioUrl;
+  let existingYtId =
     track.videoId ||
+    track.youtubeId ||
     (track.id && String(track.id).startsWith('yt_') ? String(track.id).replace('yt_', '') : null);
 
-  // Determine full target duration (e.g. from trackTimeMillis or track.duration if > 35, else default 210s)
+  // Remove 30-Second Previews: completely purge iTunes previewUrl
+  if (existingUrl && isPreviewUrl(existingUrl, track.duration)) {
+    existingUrl = '';
+  }
+
   const fullDuration =
     track.duration && track.duration > 35
       ? track.duration
@@ -153,28 +214,33 @@ export const resolveFullAudioTrack = async (track) => {
       ? Math.floor(track.trackTimeMillis / 1000)
       : 210;
 
-  // If track already has a valid full audio stream (not a 30s previewUrl), return as-is
-  if (existingUrl && !isPreviewUrl(existingUrl, track.duration)) {
+  const artistName = (track.artist_name || track.artist || '').trim();
+  const trackTitle = (track.title || '').trim();
+
+  // If we don't have a videoId yet, resolve it via getYoutubeTrack
+  if (!existingYtId && (trackTitle || artistName)) {
+    const ytResolved = await getYoutubeTrack(trackTitle, artistName);
+    if (ytResolved && ytResolved.videoId) {
+      existingYtId = ytResolved.videoId;
+    }
+  }
+
+  if (existingUrl) {
     return {
       ...track,
-      youtubeId: existingYtId,
       videoId: existingYtId,
+      youtubeId: existingYtId,
       audio_url: existingUrl,
       audioUrl: existingUrl,
       duration: fullDuration,
     };
   }
 
-  const artistName = (track.artist_name || track.artist || '').trim();
-  const trackTitle = (track.title || '').trim();
-
-  // Prompt requirement: format query as `${track.artist} - ${track.title} official audio`
+  // Format query as `${track.artist} - ${track.title} official audio`
   const searchQuery = artistName ? `${artistName} - ${trackTitle}` : `${trackTitle}`;
   const ytSearchQuery = `${searchQuery} official audio`;
 
-  console.log(`Resolving full audio stream for: "${ytSearchQuery}"...`);
-
-  // 1. YouTube Public Search (Piped / Invidious API mirrors)
+  // 1. YouTube Search
   try {
     const ytTracks = await fetchYouTubePublic(ytSearchQuery, 10);
     const rankedYt = filterAndRankAudioCandidates(ytTracks, trackTitle, artistName);
@@ -188,8 +254,8 @@ export const resolveFullAudioTrack = async (track) => {
       const ytId = bestYt.id ? String(bestYt.id).replace('yt_', '') : existingYtId;
       return {
         ...track,
-        youtubeId: ytId,
-        videoId: ytId,
+        videoId: ytId || existingYtId,
+        youtubeId: ytId || existingYtId,
         audio_url: streamUrl,
         audioUrl: streamUrl,
         duration: resolvedDur,
@@ -201,7 +267,7 @@ export const resolveFullAudioTrack = async (track) => {
     console.warn('YouTube exact stream resolution error:', err);
   }
 
-  // 2. JioSaavn CDN Search (Full Studio Audio Streams)
+  // 2. JioSaavn CDN Search
   try {
     const res = await fetchWithTimeout(
       `https://saavn.dev/api/search/songs?query=${encodeURIComponent(searchQuery)}&limit=10`,
@@ -230,8 +296,8 @@ export const resolveFullAudioTrack = async (track) => {
       if (bestSaavn) {
         return {
           ...track,
-          youtubeId: existingYtId,
           videoId: existingYtId,
+          youtubeId: existingYtId,
           audio_url: bestSaavn.audio_url,
           audioUrl: bestSaavn.audio_url,
           duration: bestSaavn.duration || fullDuration,
@@ -243,43 +309,12 @@ export const resolveFullAudioTrack = async (track) => {
     console.warn('Saavn exact stream resolution error:', err);
   }
 
-  // 3. Audius Open API Stream Search
-  try {
-    const res = await fetchWithTimeout(
-      `https://api.audius.co/v1/tracks/search?query=${encodeURIComponent(searchQuery)}&limit=5`,
-      2500
-    );
-    if (res.ok) {
-      const json = await res.json();
-      const items = json.data || [];
-      const audiusCandidates = items.map((i) => ({
-        title: i.title,
-        artist_name: i.user?.name || i.artist_name,
-        audio_url: `https://api.audius.co/v1/tracks/${i.id}/stream`,
-        duration: i.duration,
-      }));
-      const rankedAudius = filterAndRankAudioCandidates(audiusCandidates, trackTitle, artistName);
-      const bestAudius = rankedAudius.find((t) => t && t.audio_url && t.duration >= 60);
-      if (bestAudius) {
-        return {
-          ...track,
-          youtubeId: existingYtId,
-          videoId: existingYtId,
-          audio_url: bestAudius.audio_url,
-          audioUrl: bestAudius.audio_url,
-          duration: bestAudius.duration || fullDuration,
-          source: 'audius',
-        };
-      }
-    }
-  } catch (err) {}
-
-  // 4. Backend YouTube Stream Resolver using yt_dlp Endpoint (/api/youtube/stream-by-query)
+  // 3. Fallback to Backend YouTube Stream Resolver
   const backendStreamUrl = `${API_BASE_URL}/youtube/stream-by-query?q=${encodeURIComponent(ytSearchQuery)}`;
   return {
     ...track,
-    youtubeId: existingYtId,
     videoId: existingYtId,
+    youtubeId: existingYtId,
     audio_url: backendStreamUrl,
     audioUrl: backendStreamUrl,
     duration: fullDuration,
