@@ -50,6 +50,46 @@ export const PlayerProvider = ({ children }) => {
     });
   };
 
+  const [favorites, setFavorites] = useState(() => {
+    try {
+      const saved = localStorage.getItem('chillmusic_favorites');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const toggleFavorite = (track) => {
+    if (!track || (!track.id && !track.song_id)) return;
+    const norm = normalizeTrack(track);
+    setFavorites((prev) => {
+      const exists = prev.some(
+        (fav) =>
+          String(fav.id || fav.song_id) === String(norm.id) ||
+          (fav.title === norm.title && (fav.artist === norm.artist || fav.artist_name === norm.artist_name))
+      );
+      let updated;
+      if (exists) {
+        updated = prev.filter(
+          (fav) => String(fav.id || fav.song_id) !== String(norm.id) && fav.title !== norm.title
+        );
+      } else {
+        updated = [norm, ...prev];
+      }
+      try {
+        localStorage.setItem('chillmusic_favorites', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const isFavorite = (trackId, title) => {
+    if (!trackId && !title) return false;
+    return favorites.some(
+      (fav) => String(fav.id || fav.song_id) === String(trackId) || (title && fav.title === title)
+    );
+  };
+
   // Auto-Queue Gemini & Expansion Integration
   const [isFetchingAutoQueue, setIsFetchingAutoQueue] = useState(false);
   const [isSmartShuffling, setIsSmartShuffling] = useState(false);
@@ -569,6 +609,9 @@ export const PlayerProvider = ({ children }) => {
         geminiSmartShuffle,
         recentlyPlayed,
         addToRecentlyPlayed,
+        favorites,
+        toggleFavorite,
+        isFavorite,
       }}
     >
       {children}

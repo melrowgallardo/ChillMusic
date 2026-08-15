@@ -49,18 +49,19 @@ const FullPlayerModal = () => {
     toggleShuffle,
     cycleRepeatMode,
     setIsQueueOpen,
+    toggleFavorite: toggleFavContext,
+    isFavorite: isFavContext,
   } = usePlayer();
 
   const [viewMode, setViewMode] = useState('lyrics'); // 'lyrics' | 'cover'
   const [lyricsData, setLyricsData] = useState(null);
   const [loadingLyrics, setLoadingLyrics] = useState(false);
-  const [isFav, setIsFav] = useState(false);
   const [playlistModalOpen, setPlaylistModalOpen] = useState(false);
 
   const { user } = useAuth();
   const { isOnline } = useOffline();
 
-  // Load favorites check could go here if global state existed
+  const isCurrentFav = isFavContext(currentTrack?.id, currentTrack?.title);
 
   useEffect(() => {
     if (currentTrack && isFullPlayerOpen) {
@@ -68,33 +69,15 @@ const FullPlayerModal = () => {
     }
   }, [currentTrack, isFullPlayerOpen]);
 
-  useEffect(() => {
-    if (user && currentTrack?.id) {
-      isFavorite(currentTrack.id).then(setIsFav).catch(() => {});
-    }
-  }, [user, currentTrack?.id]);
-
   const handleToggleFavorite = async () => {
-    if (!user || !currentTrack) return;
-
-    if (isOnline) {
+    if (!currentTrack) return;
+    toggleFavContext(currentTrack);
+    if (user && isOnline) {
       try {
-        const newStatus = await toggleFavFirestore(currentTrack);
-        setIsFav(newStatus);
+        await toggleFavFirestore(currentTrack);
       } catch (err) {
         console.error('Favorite toggle failed:', err);
       }
-    } else {
-      const newFav = !isFav;
-      setIsFav(newFav);
-      await enqueueOfflineAction(newFav ? 'ADD_FAVORITE' : 'REMOVE_FAVORITE', {
-        item_type: 'song',
-        item_id: currentTrack.id,
-        title: currentTrack.title,
-        subtitle: currentTrack.artist_name,
-        image_url: currentTrack.image_url,
-        audio_url: currentTrack.audio_url,
-      });
     }
   };
 
@@ -304,9 +287,9 @@ const FullPlayerModal = () => {
 
           <IconButton 
             onClick={handleToggleFavorite} 
-            sx={{ color: isFav ? 'var(--accent-pink)' : '#ffffff' }}
+            sx={{ color: isCurrentFav ? 'var(--accent-pink)' : '#ffffff' }}
           >
-            {isFav ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+            {isCurrentFav ? <FavoriteIcon sx={{ color: '#ef4444' }} /> : <FavoriteBorderIcon />}
           </IconButton>
         </Box>
 

@@ -13,46 +13,27 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
 const TrackCard = ({ track, queue = [] }) => {
-  const { playTrack, currentTrack, isPlaying } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, toggleFavorite: toggleFavContext, isFavorite: isFavContext } = usePlayer();
   const { user } = useAuth();
   const { isOnline } = useOffline();
-  const [isFav, setIsFav] = useState(false);
 
-  React.useEffect(() => {
-    if (user && track?.id) {
-      isFavorite(track.id).then(setIsFav).catch(() => {});
-    }
-  }, [user, track?.id]);
-
-  const isCurrent = currentTrack && currentTrack.id === track.id;
+  const isFavCard = isFavContext(track?.id, track?.title);
+  const isCurrent = currentTrack && (String(currentTrack.id) === String(track.id) || currentTrack.title === track.title);
 
   const handlePlay = (e) => {
     e.stopPropagation();
     playTrack(track, queue.length ? queue : [track]);
   };
 
-  const toggleFavorite = async (e) => {
+  const handleToggleFav = async (e) => {
     e.stopPropagation();
-    if (!user) return;
-
-    if (isOnline) {
+    toggleFavContext(track);
+    if (user && isOnline) {
       try {
-        const newStatus = await toggleFavFirestore(track);
-        setIsFav(newStatus);
+        await toggleFavFirestore(track);
       } catch (err) {
         console.error('Failed favorite toggle online:', err);
       }
-    } else {
-      const newFavState = !isFav;
-      setIsFav(newFavState);
-      await enqueueOfflineAction(newFavState ? 'ADD_FAVORITE' : 'REMOVE_FAVORITE', {
-        item_type: 'song',
-        item_id: track.id,
-        title: track.title,
-        subtitle: track.artist_name,
-        image_url: track.image_url,
-        audio_url: track.audio_url,
-      });
     }
   };
 
@@ -188,13 +169,11 @@ const TrackCard = ({ track, queue = [] }) => {
               <DownloadIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          {user && (
-            <Tooltip title={isFav ? 'Remove Favorite' : 'Add Favorite'}>
-              <IconButton size="small" onClick={toggleFavorite} sx={{ color: isFav ? 'var(--accent-pink)' : 'var(--text-muted)' }}>
-                {isFav ? <FavoriteIcon fontSize="small" /> : <FavoriteBorderIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-          )}
+          <Tooltip title={isFavCard ? 'Remove Favorite' : 'Add Favorite'}>
+            <IconButton size="small" onClick={handleToggleFav} sx={{ color: isFavCard ? 'var(--accent-pink)' : 'var(--text-muted)' }}>
+              {isFavCard ? <FavoriteIcon fontSize="small" sx={{ color: '#ef4444' }} /> : <FavoriteBorderIcon fontSize="small" />}
+            </IconButton>
+          </Tooltip>
         </Box>
       </Box>
     </Box>

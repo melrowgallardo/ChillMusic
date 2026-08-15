@@ -18,7 +18,7 @@ const tabIndexMap = { favorites: 0, playlists: 1, history: 2, downloads: 3 };
 
 const Library = () => {
   const { user } = useAuth();
-  const { playTrack, recentlyPlayed } = usePlayer();
+  const { playTrack, recentlyPlayed, favorites: contextFavorites, toggleFavorite: toggleContextFav } = usePlayer();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
   const tabParam = searchParams.get('tab');
@@ -84,7 +84,7 @@ const Library = () => {
     loadLibraryData();
   }, [user]);
 
-  if (!user && (!recentlyPlayed || recentlyPlayed.length === 0)) {
+  if (!user && (!recentlyPlayed || recentlyPlayed.length === 0) && (!contextFavorites || contextFavorites.length === 0)) {
     return (
       <Box sx={{ p: 5, textAlign: 'center' }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
@@ -97,15 +97,23 @@ const Library = () => {
   if (loading) return <LoadingSpinner message="Loading your library..." />;
 
   // Normalize track data
-  const favoriteTracks = favorites.map((fav) => ({
-    id: fav.item_id || fav.id,
-    title: fav.title || fav.song_title || 'Unknown Title',
-    artist_name: fav.artist_name || fav.subtitle || 'Artist',
-    album_name: fav.album_name || fav.album || 'Single',
-    image_url: fav.image_url || fav.cover_url || fav.image || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80',
-    audio_url: fav.audio_url,
-    duration: fav.duration || 180,
-  }));
+  const combinedFavs = [...(contextFavorites || []), ...(favorites || [])];
+  const seenFavIds = new Set();
+  const favoriteTracks = [];
+  for (const fav of combinedFavs) {
+    const fid = fav.item_id || fav.song_id || fav.id;
+    if (!fid || seenFavIds.has(String(fid))) continue;
+    seenFavIds.add(String(fid));
+    favoriteTracks.push({
+      id: fid,
+      title: fav.title || fav.song_title || 'Unknown Title',
+      artist_name: fav.artist_name || fav.artist || fav.subtitle || 'Artist',
+      album_name: fav.album_name || fav.album || 'Single',
+      image_url: fav.image_url || fav.cover_url || fav.image || fav.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80',
+      audio_url: fav.audio_url || fav.audioUrl,
+      duration: fav.duration || 180,
+    });
+  }
 
   const rawHistory = [...(recentlyPlayed || []), ...(history || [])];
   const seenHistIds = new Set();
@@ -150,8 +158,9 @@ const Library = () => {
 
   const handleRemoveFavorite = async (track) => {
     try {
-      await toggleFavorite(track);
-      setFavorites((prev) => prev.filter((f) => String(f.item_id || f.id) !== String(track.id)));
+      toggleContextFav(track);
+      await toggleFavorite(track).catch(() => {});
+      setFavorites((prev) => prev.filter((f) => String(f.item_id || f.id || f.song_id) !== String(track.id)));
     } catch (err) {
       console.error('Failed to remove favorite:', err);
     }
@@ -241,9 +250,9 @@ const Library = () => {
           '& .MuiTabs-indicator': { backgroundColor: 'var(--accent-primary)', height: 3 },
         }}
       >
-        <Tab label={`Favorites (${favorites.length})`} sx={{ fontWeight: 700 }} />
+        <Tab label={`FAVORITES (${favoriteTracks.length})`} sx={{ fontWeight: 700 }} />
         <Tab label={`Playlists (${playlists.length})`} sx={{ fontWeight: 700 }} />
-        <Tab label={`Recently Played (${history.length})`} sx={{ fontWeight: 700 }} />
+        <Tab label={`Recently Played (${historyTracks.length})`} sx={{ fontWeight: 700 }} />
         <Tab label={`Downloads (${downloads.length})`} sx={{ fontWeight: 700 }} />
       </Tabs>
 

@@ -26,17 +26,12 @@ const formatDuration = (secs) => {
 };
 
 const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) => {
-  const { playTrack, currentTrack, isPlaying, togglePlayPause, addToQueue } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlayPause, addToQueue, toggleFavorite: toggleFavContext, isFavorite: isFavContext } = usePlayer();
   const { user } = useAuth();
   const { isOnline } = useOffline();
-  const [isFav, setIsFav] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
 
-  React.useEffect(() => {
-    if (user && track?.id) {
-      isFavorite(track.id).then(setIsFav).catch(() => {});
-    }
-  }, [user, track?.id]);
+  const isFavRow = isFavContext(track?.id, track?.title);
 
   const isCurrent =
     currentTrack &&
@@ -64,26 +59,13 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
   const handleToggleFavorite = async (e) => {
     e.stopPropagation();
     handleMenuClose();
-    if (!user) return;
-
-    if (isOnline) {
+    toggleFavContext(track);
+    if (user && isOnline) {
       try {
-        const newStatus = await toggleFavorite(track);
-        setIsFav(newStatus);
+        await toggleFavorite(track);
       } catch (err) {
         console.error('Favorite toggle failed:', err);
       }
-    } else {
-      const newFav = !isFav;
-      setIsFav(newFav);
-      await enqueueOfflineAction(newFav ? 'ADD_FAVORITE' : 'REMOVE_FAVORITE', {
-        item_type: 'song',
-        item_id: track.id,
-        title: track.title,
-        subtitle: track.artist_name,
-        image_url: track.image_url,
-        audio_url: track.audio_url,
-      });
     }
   };
 
@@ -240,14 +222,12 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
             <ListItemText>Add to Queue</ListItemText>
           </MenuItem>
 
-          {user && (
-            <MenuItem onClick={handleToggleFavorite}>
-              <ListItemIcon>
-                {isFav ? <FavoriteIcon fontSize="small" color="error" /> : <FavoriteBorderIcon fontSize="small" />}
-              </ListItemIcon>
-              <ListItemText>{isFav ? 'Remove Favorite' : 'Add Favorite'}</ListItemText>
-            </MenuItem>
-          )}
+          <MenuItem onClick={handleToggleFavorite}>
+            <ListItemIcon>
+              {isFavRow ? <FavoriteIcon fontSize="small" sx={{ color: '#ef4444' }} /> : <FavoriteBorderIcon fontSize="small" />}
+            </ListItemIcon>
+            <ListItemText>{isFavRow ? 'Remove Favorite' : 'Add Favorite'}</ListItemText>
+          </MenuItem>
 
           {user && onAddToPlaylist && (
             <MenuItem
