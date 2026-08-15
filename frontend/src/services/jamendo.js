@@ -211,30 +211,54 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
   // 5. Fast iTunes Songs Search (~250ms direct public API for real metadata & album titles)
   const fetchITunesSongsFast = async () => {
     try {
-      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=${limit}`, 2500);
+      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=30`, 2500);
       if (json && Array.isArray(json.results)) {
-        return json.results.map((item) => {
-          const cover = item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
-          const albumTitle = item.collectionName || 'Single';
-          const fullDur = Math.floor((item.trackTimeMillis || 210000) / 1000);
-          return {
-            id: `it_song_${item.trackId}`,
-            title: item.trackName || 'Unknown Title',
-            artist: item.artistName || 'Unknown Artist',
-            artist_name: item.artistName || 'Unknown Artist',
-            album: albumTitle,
-            album_title: albumTitle,
-            album_name: albumTitle,
-            duration: fullDur,
-            image_url: cover,
-            cover_url: cover,
-            image: cover,
-            artwork: cover,
-            preview_url: '',
-            audio_url: '',
-            source: 'itunes',
-          };
-        });
+        return json.results
+          .map((item) => {
+            const cover = item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
+            const albumTitle = item.collectionName || item.collectionCensoredName || item.album || 'Single';
+            const genreName = item.primaryGenreName || item.genre || 'Music';
+            const fullDur = Math.floor((item.trackTimeMillis || 210000) / 1000);
+            return {
+              id: `it_song_${item.trackId}`,
+              title: item.trackName || 'Unknown Title',
+              artist: item.artistName || 'Unknown Artist',
+              artist_name: item.artistName || 'Unknown Artist',
+              album: albumTitle,
+              album_title: albumTitle,
+              album_name: albumTitle,
+              genre: genreName,
+              duration: fullDur,
+              image_url: cover,
+              cover_url: cover,
+              image: cover,
+              artwork: cover,
+              preview_url: item.previewUrl || '',
+              audio_url: item.previewUrl || '',
+              source: 'itunes',
+            };
+          })
+          .sort((a, b) => {
+            const qLower = q.toLowerCase();
+            const aArtist = a.artist_name.toLowerCase();
+            const bArtist = b.artist_name.toLowerCase();
+            const aTitle = a.title.toLowerCase();
+            const bTitle = b.title.toLowerCase();
+
+            // 1. Exact artist matches first
+            const aExactArt = aArtist === qLower || aArtist.startsWith(qLower);
+            const bExactArt = bArtist === qLower || bArtist.startsWith(qLower);
+            if (aExactArt && !bExactArt) return -1;
+            if (!aExactArt && bExactArt) return 1;
+
+            // 2. Penalize remix / karaoke / tribute / instrumental covers
+            const aIsRemix = aTitle.includes('remix') || aTitle.includes('karaoke') || aTitle.includes('tribute') || aTitle.includes('cover version');
+            const bIsRemix = bTitle.includes('remix') || bTitle.includes('karaoke') || bTitle.includes('tribute') || bTitle.includes('cover version');
+            if (!aIsRemix && bIsRemix) return -1;
+            if (aIsRemix && !bIsRemix) return 1;
+
+            return 0;
+          });
       }
     } catch (e) {}
     return [];
@@ -243,15 +267,17 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
   // 6. Fast iTunes Albums Search (~250ms direct public API)
   const fetchITunesAlbums = async () => {
     try {
-      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=${limit}`, 2500);
+      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=25`, 2500);
       if (json && Array.isArray(json.results)) {
         return json.results.map((item) => {
           const cover = item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80';
           const releaseDate = item.releaseDate ? item.releaseDate.substring(0, 4) : '2024';
+          const albumTitle = item.collectionName || item.collectionCensoredName || 'Unknown Album';
           return {
             id: `it_${item.collectionId}`,
-            title: item.collectionName || 'Unknown Album',
-            name: item.collectionName || 'Unknown Album',
+            collectionId: item.collectionId,
+            title: albumTitle,
+            name: albumTitle,
             artist: item.artistName || 'Unknown Artist',
             artist_name: item.artistName || 'Unknown Artist',
             coverUrl: cover,

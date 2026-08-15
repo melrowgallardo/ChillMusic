@@ -8,7 +8,8 @@ export const normalizeTrack = (item) => {
   const title = item.trackName || item.title || item.name || 'Unknown Title';
   const artist = item.artistName || item.artist || item.artist_name || 'Unknown Artist';
   const artist_name = item.artist_name || item.artistName || item.artist || 'Unknown Artist';
-  const album = item.collectionName || item.album || item.album_name || 'Single';
+  const album = item.collectionName || item.collectionCensoredName || item.album || item.album_name || item.album_title || 'Single';
+  const genre = item.primaryGenreName || item.genre || item.primary_genre || 'Music';
 
   const rawCover =
     item.cover ||
@@ -50,6 +51,8 @@ export const normalizeTrack = (item) => {
     artist_name,
     album,
     album_name: album,
+    album_title: album,
+    genre,
     cover,
     image_url: cover,
     cover_url: cover,

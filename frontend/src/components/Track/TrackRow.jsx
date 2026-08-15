@@ -213,7 +213,9 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
         }}
         noWrap
       >
-        {typeof track.album === 'object' ? (track.album?.name || track.album?.title) : (track.album_name && track.album_name !== 'Audius Music' ? track.album_name : track.album_title && track.album_title !== 'Audius Music' ? track.album_title : track.album && track.album !== 'Audius Music' ? track.album : 'Single')}
+        {typeof track.album === 'object'
+          ? (track.album?.name || track.album?.title || 'Single')
+          : (track.album || track.album_name || track.album_title || 'Single')}
       </Typography>
 
       {/* Right: Duration & Menu */}
