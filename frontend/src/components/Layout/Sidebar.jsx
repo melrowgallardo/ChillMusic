@@ -39,9 +39,9 @@ const Sidebar = () => {
   ];
 
   const libraryQuickLinks = [
-    { label: 'Favorites', path: '/favorites', icon: <FavoriteIcon sx={{ color: 'var(--accent-pink)' }} /> },
-    { label: 'Recently Played', path: '/recently-played', icon: <HistoryIcon sx={{ color: 'var(--accent-secondary)' }} /> },
-    { label: 'Downloads', path: '/downloads', icon: <DownloadIcon sx={{ color: '#10b981' }} /> },
+    { label: 'Favorites', path: '/library?tab=favorites', icon: <FavoriteIcon sx={{ color: 'var(--accent-pink)' }} /> },
+    { label: 'Recently Played', path: '/library?tab=history', icon: <HistoryIcon sx={{ color: 'var(--accent-secondary)' }} /> },
+    { label: 'Downloads', path: '/library?tab=downloads', icon: <DownloadIcon sx={{ color: '#10b981' }} /> },
   ];
 
   return (
@@ -127,12 +127,12 @@ const Sidebar = () => {
       </Typography>
       <List sx={{ px: 0, mt: 1 }}>
         {libraryQuickLinks.map((item) => {
-          const isActive = location.pathname === item.path ||
-            (item.path === '/favorites' && location.search.includes('favorites')) ||
-            (item.path === '/recently-played' && location.search.includes('history')) ||
-            (item.path === '/downloads' && location.search.includes('downloads'));
+          const isActive =
+            (item.label === 'Favorites' && (location.pathname === '/favorites' || (location.pathname === '/library' && (location.search.includes('favorites') || !location.search)))) ||
+            (item.label === 'Recently Played' && (location.pathname === '/recently-played' || (location.pathname === '/library' && location.search.includes('history')))) ||
+            (item.label === 'Downloads' && (location.pathname === '/downloads' || (location.pathname === '/library' && location.search.includes('downloads'))));
           return (
-            <ListItem disablePadding key={item.path} sx={{ mb: 0.5 }}>
+            <ListItem disablePadding key={item.label} sx={{ mb: 0.5 }}>
               <ListItemButton
                 onClick={() => navigate(item.path)}
                 sx={{
