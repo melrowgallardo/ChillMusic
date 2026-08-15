@@ -6,6 +6,8 @@ import { useAuth } from './AuthContext';
 import { getLocalDownloadById } from '../services/offlineSync';
 import { resolveFullAudioTrack } from '../services/audioResolver';
 
+import { normalizeTrack } from '../utils/trackUtils';
+
 const PlayerContext = createContext();
 
 export const PlayerProvider = ({ children }) => {
@@ -147,7 +149,7 @@ export const PlayerProvider = ({ children }) => {
     };
     const handleEnded = () => handleTrackEnd();
     const handleError = (e) => {
-      console.error('Audio playback error:', e);
+      console.error('Audio Tag Error:', e?.target?.error || e);
       setIsPlaying(false);
     };
 
@@ -173,16 +175,17 @@ export const PlayerProvider = ({ children }) => {
     return `${API_BASE_URL}${cleanUrl}`;
   };
 
-  const playTrack = async (track, newQueue = null, index = 0) => {
-    if (!track) return;
+  const playTrack = async (song, newQueue = null, index = 0) => {
+    if (!song) return;
 
-    let targetQueue = newQueue ? [...newQueue] : [...queue];
+    const normalizedSong = normalizeTrack(song);
+    let targetQueue = newQueue ? newQueue.map(normalizeTrack) : [...queue];
 
     // Find if track is already in targetQueue
     const existingIdx = targetQueue.findIndex(
       (t) =>
-        String(t.id) === String(track.id) ||
-        (t.title === track.title && t.artist_name === track.artist_name)
+        String(t.id) === String(normalizedSong.id) ||
+        (t.title === normalizedSong.title && t.artist_name === normalizedSong.artist_name)
     );
 
     if (existingIdx !== -1) {
@@ -190,16 +193,16 @@ export const PlayerProvider = ({ children }) => {
       const [item] = targetQueue.splice(existingIdx, 1);
       targetQueue.unshift(item);
     } else {
-      targetQueue.unshift(track);
+      targetQueue.unshift(normalizedSong);
     }
 
     setCurrentIndex(0);
     setQueue(targetQueue);
-    setCurrentTrack(track);
+    setCurrentTrack(normalizedSong);
 
     // Auto-populate queue to 20-30 context-aware tracks if short
     if (targetQueue.length < 20) {
-      fetchContextAwareRecommendations(track, targetQueue).then((expanded) => {
+      fetchContextAwareRecommendations(normalizedSong, targetQueue).then((expanded) => {
         if (expanded && expanded.length > 0) {
           setQueue((prev) => {
             const currentIds = new Set(prev.map((t) => String(t.id)));
@@ -211,7 +214,8 @@ export const PlayerProvider = ({ children }) => {
     }
 
     // Resolve full-length audio stream if missing, invalid, or preview URL
-    const targetTrack = await resolveFullAudioTrack(track);
+    const resolvedTarget = await resolveFullAudioTrack(normalizedSong);
+    const targetTrack = normalizeTrack(resolvedTarget || normalizedSong);
     if (targetTrack) {
       setCurrentTrack(targetTrack);
     }
@@ -223,7 +227,7 @@ export const PlayerProvider = ({ children }) => {
     audio.removeAttribute('src');
     audio.load();
 
-    const rawUrl = targetTrack?.audio_url || targetTrack?.audioUrl || targetTrack?.preview_url || targetTrack?.previewUrl || '';
+    const rawUrl = targetTrack?.audioUrl || targetTrack?.audio_url || targetTrack?.previewUrl || targetTrack?.preview_url || '';
     const defaultUrl = getFullAudioUrl(rawUrl);
 
     const startPlay = (urlToPlay) => {
@@ -239,7 +243,7 @@ export const PlayerProvider = ({ children }) => {
               recordHistory(targetTrack);
             })
             .catch((err) => {
-              console.warn('Browser auto-play restriction caught cleanly:', err);
+              console.error('Playback Error:', err);
               setIsPlaying(false);
             });
         }

@@ -10,6 +10,8 @@ import PlaylistCard from '../components/Playlist/PlaylistCard';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ALBUMS } from '../services/mockData';
 
+import { normalizeTrack } from '../utils/trackUtils';
+
 const GENRE_TAGS = ['Chill', 'Lofi', 'Ambient', 'Electronic', 'Jazz', 'Rock', 'Pop', 'Acoustic', 'Piano', 'Hip Hop'];
 
 const extractArtists = (songsList = [], albumsList = []) => {
@@ -86,7 +88,7 @@ const Search = () => {
 
       if (currentReq === searchReqId.current) {
         if (data) {
-          const dynamicSongs = data.songs && data.songs.length > 0 ? data.songs : FALLBACK_TRACKS;
+          const dynamicSongs = (data.songs && data.songs.length > 0 ? data.songs : FALLBACK_TRACKS).map(normalizeTrack);
           let dynamicArtists = data.artists && Array.isArray(data.artists) ? data.artists : [];
           const dynamicAlbums = data.albums && data.albums.length > 0 ? data.albums : FALLBACK_ALBUMS;
           const dynamicPlaylists = data.playlists && data.playlists.length > 0 ? data.playlists : FALLBACK_PLAYLISTS;
@@ -105,7 +107,7 @@ const Search = () => {
             t.title.toLowerCase().includes(term.toLowerCase()) ||
             t.artist_name.toLowerCase().includes(term.toLowerCase())
           );
-          const fallbackSongs = matchedSongs.length > 0 ? matchedSongs : FALLBACK_TRACKS;
+          const fallbackSongs = (matchedSongs.length > 0 ? matchedSongs : FALLBACK_TRACKS).map(normalizeTrack);
           setSongs(fallbackSongs);
           setArtists(extractArtists(fallbackSongs, FALLBACK_ALBUMS));
           setAlbums(FALLBACK_ALBUMS);
@@ -115,7 +117,7 @@ const Search = () => {
     } catch (err) {
       console.error('Search failed:', err);
       if (currentReq === searchReqId.current) {
-        setSongs(FALLBACK_TRACKS);
+        setSongs(FALLBACK_TRACKS.map(normalizeTrack));
         setArtists(extractArtists(FALLBACK_TRACKS, FALLBACK_ALBUMS));
         setAlbums(FALLBACK_ALBUMS);
         setPlaylists(FALLBACK_PLAYLISTS);
