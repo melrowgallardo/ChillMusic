@@ -14,8 +14,12 @@ const AudioPlayer = () => {
   useEffect(() => {
     const url = currentTrack?.audioUrl || currentTrack?.audio_url;
     if (audioRef?.current && url) {
-      audioRef.current.src = url;
-      audioRef.current.load();
+      if (audioRef.current.src !== url) {
+        audioRef.current.src = url;
+        audioRef.current.currentTime = 0;
+        setCurrentTime(0);
+        audioRef.current.load();
+      }
       const playPromise = audioRef.current.play();
       if (playPromise !== undefined) {
         playPromise
@@ -26,7 +30,7 @@ const AudioPlayer = () => {
           });
       }
     }
-  }, [currentTrack?.audioUrl, currentTrack?.audio_url, currentTrack?.id, audioRef, setIsPlaying]);
+  }, [currentTrack?.audioUrl, currentTrack?.audio_url, currentTrack?.id, audioRef, setIsPlaying, setCurrentTime]);
 
   return (
     <audio

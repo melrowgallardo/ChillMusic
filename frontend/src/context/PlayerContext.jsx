@@ -227,11 +227,15 @@ export const PlayerProvider = ({ children }) => {
     setCurrentIndex(0);
     setQueue(targetQueue);
     setCurrentTrack(normalizedSong);
-    if (normalizedSong.duration && normalizedSong.duration > 35) {
-      setDuration(normalizedSong.duration);
-    } else {
-      setDuration(210);
-    }
+    setCurrentTime(0);
+
+    const fullDur =
+      normalizedSong.duration && normalizedSong.duration > 35
+        ? normalizedSong.duration
+        : normalizedSong.trackTimeMillis
+        ? Math.floor(normalizedSong.trackTimeMillis / 1000)
+        : 210;
+    setDuration(fullDur);
 
     // Auto-populate queue to 20-30 context-aware tracks if short
     if (targetQueue.length < 20) {
@@ -246,8 +250,12 @@ export const PlayerProvider = ({ children }) => {
       });
     }
 
-    // Resolve full-length audio stream if missing, invalid, or preview URL
-    const resolvedTarget = await resolveFullAudioTrack(normalizedSong);
+    // Resolve full-length audio stream via YouTube / Piped / Invidious stream resolver
+    // Query format: `${track.artist} - ${track.title} official audio`
+    const resolvedTarget = await resolveFullAudioTrack({
+      ...normalizedSong,
+      duration: fullDur,
+    });
     const targetTrack = normalizeTrack(resolvedTarget || normalizedSong);
     if (targetTrack) {
       setCurrentTrack(targetTrack);
@@ -263,12 +271,14 @@ export const PlayerProvider = ({ children }) => {
     audio.removeAttribute('src');
     audio.load();
 
-    const rawUrl = targetTrack?.audioUrl || targetTrack?.audio_url || targetTrack?.previewUrl || targetTrack?.preview_url || '';
+    const rawUrl = targetTrack?.audioUrl || targetTrack?.audio_url || '';
     const defaultUrl = getFullAudioUrl(rawUrl);
 
     const startPlay = (urlToPlay) => {
       if (urlToPlay) {
         audio.src = urlToPlay;
+        audio.currentTime = 0; // Always begin at 0:00 Intro
+        setCurrentTime(0);
         audio.load(); // Dynamically update and reload exact audio URL matching currentTrack.id
 
         const playPromise = audio.play();
@@ -279,7 +289,7 @@ export const PlayerProvider = ({ children }) => {
               recordHistory(targetTrack);
             })
             .catch((err) => {
-              console.error('Playback Error:', err);
+              console.error('Full Stream Playback Error:', err);
               setIsPlaying(false);
             });
         }
