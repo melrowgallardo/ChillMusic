@@ -9,6 +9,7 @@ import FullPlayerModal from '../Player/FullPlayerModal';
 import OfflineBanner from '../Common/OfflineBanner';
 import { usePlayer } from '../../context/PlayerContext';
 
+import AudioPlayer from '../Player/AudioPlayer';
 import MobileBottomNav from './MobileBottomNav';
 
 const MainLayout = () => {
@@ -19,6 +20,7 @@ const MainLayout = () => {
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', display: 'flex' }}>
+      <AudioPlayer />
       {!shouldHideNav && <Sidebar />}
 
       <Box

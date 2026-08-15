@@ -276,3 +276,39 @@ export const updateUserSettings = async (newSettings) => {
     console.error('Error saving settings:', err);
   }
 };
+
+// =======================
+// ACCOUNT DELETION
+// =======================
+export const deleteUserData = async (uid) => {
+  if (!uid) return;
+  try {
+    // Delete favorites subcollection
+    const favsRef = collection(db, 'users', uid, 'favorites');
+    const favsSnap = await getDocs(favsRef);
+    for (const d of favsSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+
+    // Delete playlists subcollection
+    const plRef = collection(db, 'users', uid, 'playlists');
+    const plSnap = await getDocs(plRef);
+    for (const d of plSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+
+    // Delete history subcollection
+    const histRef = collection(db, 'users', uid, 'history');
+    const histSnap = await getDocs(histRef);
+    for (const d of histSnap.docs) {
+      await deleteDoc(d.ref);
+    }
+
+    // Delete root user document
+    const userDocRef = doc(db, 'users', uid);
+    await deleteDoc(userDocRef);
+  } catch (err) {
+    console.error('Error deleting user Firestore data:', err);
+  }
+};
+

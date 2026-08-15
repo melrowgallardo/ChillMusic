@@ -455,8 +455,12 @@ export const PlayerProvider = ({ children }) => {
   return (
     <PlayerContext.Provider
       value={{
+        audioRef,
         currentTrack,
         isPlaying,
+        setIsPlaying,
+        setDuration,
+        setCurrentTime,
         queue,
         currentIndex,
         volume,

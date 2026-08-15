@@ -1,14 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, TextField, Button, Avatar, Switch, FormControlLabel, Slider, Paper, Divider } from '@mui/material';
+import {
+  Box,
+  Typography,
+  TextField,
+  Button,
+  Avatar,
+  Switch,
+  FormControlLabel,
+  Slider,
+  Paper,
+  Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Snackbar,
+  Alert,
+} from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import SyncIcon from '@mui/icons-material/Sync';
 import LogoutIcon from '@mui/icons-material/Logout';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import { useNavigate } from 'react-router-dom';
+import { deleteUser } from 'firebase/auth';
+import { auth } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import { useThemeMode } from '../context/ThemeContext';
 import { useOffline } from '../context/OfflineContext';
 import { usePlayer } from '../context/PlayerContext';
-import { getUserSettings, updateUserSettings } from '../services/firestoreService';
+import { getUserSettings, updateUserSettings, deleteUserData } from '../services/firestoreService';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 
 const Profile = () => {
@@ -28,6 +48,9 @@ const Profile = () => {
   });
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [toastMsg, setToastMsg] = useState('');
+  const [openConfirmDelete, setOpenConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -68,13 +91,44 @@ const Profile = () => {
     navigate('/');
   };
 
-  if (!user) return <Typography>Please log in to view profile.</Typography>;
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      if (user && user.uid) {
+        await deleteUserData(user.uid);
+      }
+      if (auth.currentUser) {
+        await deleteUser(auth.currentUser);
+      }
+      clearQueue();
+      localStorage.clear();
+      sessionStorage.clear();
+      setToastMsg('Account deleted successfully');
+
+      setTimeout(() => {
+        logout();
+        navigate('/login');
+      }, 1500);
+    } catch (err) {
+      console.error('Failed to delete account:', err);
+      if (err.code === 'auth/requires-recent-login') {
+        alert('Security Notice: Deleting your account requires a recent login. Please log in again and retry.');
+      } else {
+        alert('Failed to delete account: ' + (err.message || err));
+      }
+    } finally {
+      setIsDeleting(false);
+      setOpenConfirmDelete(false);
+    }
+  };
+
+  if (!user) return <Typography sx={{ p: 4 }}>Please log in to view profile.</Typography>;
   if (loading) return <LoadingSpinner message="Loading user profile..." />;
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
       <Typography variant="h4" sx={{ fontWeight: 800, fontFamily: 'var(--font-heading)' }}>
-        Profile
+        Profile & Settings
       </Typography>
 
       {message && (
@@ -216,6 +270,90 @@ const Profile = () => {
           {syncing ? 'Syncing Now...' : 'Force Offline Queue Sync'}
         </Button>
       </Paper>
+
+      {/* Danger Zone: Delete Account */}
+      <Paper
+        className="glass-panel"
+        sx={{
+          p: 4,
+          borderColor: 'rgba(239, 68, 68, 0.4)',
+          backgroundColor: 'rgba(239, 68, 68, 0.04)',
+        }}
+      >
+        <Typography variant="h6" sx={{ fontWeight: 700, color: '#ef4444', mb: 1 }}>
+          Danger Zone
+        </Typography>
+        <Typography variant="body2" sx={{ color: 'var(--text-secondary)', mb: 3 }}>
+          Permanently remove your profile data, saved playlists, favorites, and playback history.
+        </Typography>
+        <Button
+          variant="contained"
+          color="error"
+          startIcon={<DeleteForeverIcon />}
+          onClick={() => setOpenConfirmDelete(true)}
+          sx={{
+            backgroundColor: '#ef4444',
+            fontWeight: 700,
+            px: 3,
+            '&:hover': { backgroundColor: '#dc2626' },
+          }}
+        >
+          🗑️ Delete Account
+        </Button>
+      </Paper>
+
+      {/* Account Deletion Confirmation Dialog */}
+      <Dialog
+        open={openConfirmDelete}
+        onClose={() => setOpenConfirmDelete(false)}
+        PaperProps={{
+          sx: {
+            backgroundColor: 'var(--bg-surface)',
+            color: 'var(--text-primary)',
+            borderRadius: 'var(--radius-md)',
+            p: 1,
+            maxWidth: 480,
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: '#ef4444' }}>
+          Delete Account Permanently?
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            Are you sure you want to permanently delete your account and all saved playlists? This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setOpenConfirmDelete(false)}
+            sx={{ color: 'var(--text-secondary)', fontWeight: 600 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteAccount}
+            disabled={isDeleting}
+            variant="contained"
+            color="error"
+            sx={{ backgroundColor: '#ef4444', fontWeight: 700, '&:hover': { backgroundColor: '#dc2626' } }}
+          >
+            {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Success Feedback Toast */}
+      <Snackbar
+        open={Boolean(toastMsg)}
+        autoHideDuration={3000}
+        onClose={() => setToastMsg('')}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" sx={{ width: '100%', fontWeight: 700 }}>
+          {toastMsg}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
