@@ -326,63 +326,96 @@ export const getPersonalizedQueriesForUser = (user, recentlyPlayed = [], favorit
 };
 
 export const searchYouTubeTracks = async (query) => {
-  try {
-    const term = query?.trim();
-    if (!term) return [];
+  const term = query?.trim();
+  if (!term) return [];
 
+  // 1. Try YouTube Data API v3
+  try {
     const apiKey =
       import.meta.env.VITE_YOUTUBE_API_KEY ||
       import.meta.env.YOUTUBE_API_KEY ||
       'AIzaSyAVW_86xvVRgRWu25NFhyiPGBSpuHx_BvA';
 
-    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=25&q=${encodeURIComponent(
+    const ytUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=20&q=${encodeURIComponent(
       term + ' song'
     )}&key=${apiKey}`;
 
-    const res = await fetch(searchUrl);
-    const data = await res.json();
+    const ytRes = await fetch(ytUrl);
+    const ytData = await ytRes.json();
 
-    if (!data?.items || data.items.length === 0) {
-      console.warn('YouTube API returned 0 items:', data);
-      return [];
+    if (ytData?.items && ytData.items.length > 0) {
+      return ytData.items
+        .filter((item) => item.id?.videoId)
+        .map((item) => {
+          const cover =
+            item.snippet?.thumbnails?.high?.url ||
+            item.snippet?.thumbnails?.medium?.url ||
+            item.snippet?.thumbnails?.default?.url ||
+            '';
+          const videoId = item.id.videoId;
+
+          return {
+            id: videoId,
+            videoId: videoId,
+            title: (item.snippet?.title || '')
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+              .replace(/&amp;/g, '&')
+              .trim(),
+            artist: item.snippet?.channelTitle || 'Artist',
+            artist_name: item.snippet?.channelTitle || 'Artist',
+            album: 'Single',
+            cover: cover,
+            cover_url: cover,
+            image: cover,
+            image_url: cover,
+            duration: 210,
+            type: 'youtube',
+          };
+        });
     }
+  } catch (ytErr) {
+    console.warn('YouTube API call failed or quota exceeded:', ytErr);
+  }
 
-    return data.items
-      .filter((item) => item.id?.videoId)
-      .map((item) => {
-        const title = (item.snippet?.title || '')
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/&amp;/g, '&')
-          .replace(/\(Official Audio\)/gi, '')
-          .replace(/\(Official Music Video\)/gi, '')
-          .replace(/\[Official Audio\]/gi, '')
-          .replace(/\[Official Video\]/gi, '');
-        const cover =
-          item.snippet?.thumbnails?.high?.url ||
-          item.snippet?.thumbnails?.medium?.url ||
-          item.snippet?.thumbnails?.default?.url ||
-          '';
-        const videoId = item.id.videoId;
+  // 2. High Reliability Fallback: Unlimited Full-Track Saavn Engine
+  try {
+    const saavnRes = await fetch(
+      `https://saavn.dev/api/search/songs?query=${encodeURIComponent(term)}&page=1&limit=25`
+    );
+    const saavnData = await saavnRes.json();
+    const saavnList = saavnData?.data?.results || [];
+
+    if (saavnList.length > 0) {
+      return saavnList.map((item) => {
+        const downloads = item.downloadUrl || [];
+        const stream = downloads[downloads.length - 1]?.url || downloads[0]?.url || '';
+        const images = item.image || [];
+        const cover = images[images.length - 1]?.url || images[0]?.url || '';
+        const artistName = item.artists?.primary?.[0]?.name || item.primaryArtists || 'Artist';
 
         return {
-          id: videoId,
-          videoId: videoId,
-          title: title.trim() || 'Untitled Track',
-          artist: item.snippet?.channelTitle || 'Artist',
-          artist_name: item.snippet?.channelTitle || 'Artist',
-          album: 'Single',
+          id: item.id || String(Date.now() + Math.random()),
+          title: item.name?.replace(/&quot;/g, '"')?.replace(/&#039;/g, "'") || term,
+          artist: artistName,
+          artist_name: artistName,
+          album: item.album?.name || 'Single',
           cover: cover,
           cover_url: cover,
           image: cover,
           image_url: cover,
-          duration: 210,
+          audioUrl: stream,
+          audio_url: stream,
+          duration: Number(item.duration) || 210,
+          type: 'direct',
         };
       });
-  } catch (err) {
-    console.error('YouTube track search failed:', err);
-    return [];
+    }
+  } catch (saavnErr) {
+    console.warn('Saavn fallback failed:', saavnErr);
   }
+
+  return [];
 };
 
 
