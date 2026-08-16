@@ -6,6 +6,8 @@ import ShuffleIcon from '@mui/icons-material/Shuffle';
 import HistoryIcon from '@mui/icons-material/History';
 import { getTrendingSongs, getNewReleases, getRecommendations, searchPlaylists, searchArtists } from '../services/jamendo';
 import { getYouTubeTrending } from '../services/youtube';
+import { searchFullTracks } from '../services/musicApi';
+import { normalizeTrack } from '../utils/trackUtils';
 import TrackCard from '../components/Track/TrackCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
 import ArtistCard from '../components/Artist/ArtistCard';
@@ -71,15 +73,19 @@ const Home = () => {
         console.warn('YouTube trending fetch error:', err);
       }
 
-      // 3. Fetch Jamendo Trending
+      // 3. Fetch Full-Length Saavn Pop Hits Trending
       try {
-        const trData = await getTrendingSongs(10);
-        if (isMounted) {
-          if (trData && trData.length > 0) {
-            setTrending(trData);
-            cacheSongsLocally(trData);
-          }
+        const saavnHits = await searchFullTracks('pop hits');
+        if (isMounted && saavnHits && saavnHits.length > 0) {
+          const normHits = saavnHits.map(normalizeTrack);
+          setTrending(normHits);
+          cacheSongsLocally(normHits);
           setLoading(false);
+        } else {
+          const trData = await getTrendingSongs(10);
+          if (isMounted && trData && trData.length > 0) {
+            setTrending(trData);
+          }
         }
       } catch (err) {
         console.warn('Trending fetch error:', err);

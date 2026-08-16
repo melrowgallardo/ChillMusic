@@ -3,6 +3,7 @@ import { Box, Typography, TextField, Tabs, Tab, Chip, Grid, Button } from '@mui/
 import SearchIcon from '@mui/icons-material/Search';
 import { useSearchParams } from 'react-router-dom';
 import { searchUnified } from '../services/jamendo';
+import { searchFullTracks } from '../services/musicApi';
 import TrackList from '../components/Track/TrackList';
 import ArtistCard from '../components/Artist/ArtistCard';
 import AlbumCard from '../components/Album/AlbumCard';
@@ -77,39 +78,20 @@ const Search = () => {
     const currentReq = ++searchReqId.current;
     setLoading(true);
     try {
-      const timeoutPromise = new Promise((resolve) =>
-        setTimeout(() => resolve(null), 4500)
-      );
-
-      const data = await Promise.race([
-        searchUnified(term, 20, source),
-        timeoutPromise,
-      ]);
-
+      const saavnTracks = await searchFullTracks(term);
       if (currentReq === searchReqId.current) {
-        if (data) {
-          const dynamicSongs = (data.songs && data.songs.length > 0 ? data.songs : FALLBACK_TRACKS).map(normalizeTrack);
-          let dynamicArtists = data.artists && Array.isArray(data.artists) ? data.artists : [];
-          const dynamicAlbums = data.albums && data.albums.length > 0 ? data.albums : FALLBACK_ALBUMS;
-          const dynamicPlaylists = data.playlists && data.playlists.length > 0 ? data.playlists : FALLBACK_PLAYLISTS;
-
-          if (dynamicArtists.length === 0 && (dynamicSongs.length > 0 || dynamicAlbums.length > 0)) {
-            dynamicArtists = extractArtists(dynamicSongs, dynamicAlbums);
-          }
-
+        if (saavnTracks && saavnTracks.length > 0) {
+          const dynamicSongs = saavnTracks.map(normalizeTrack);
+          const dynamicArtists = extractArtists(dynamicSongs, []);
           setSongs(dynamicSongs);
           setArtists(dynamicArtists);
-          setAlbums(dynamicAlbums);
-          setPlaylists(dynamicPlaylists);
+          setAlbums(FALLBACK_ALBUMS);
+          setPlaylists(FALLBACK_PLAYLISTS);
         } else {
-          // Timeout occurred
-          const matchedSongs = FALLBACK_TRACKS.filter(t =>
-            t.title.toLowerCase().includes(term.toLowerCase()) ||
-            t.artist_name.toLowerCase().includes(term.toLowerCase())
-          );
-          const fallbackSongs = (matchedSongs.length > 0 ? matchedSongs : FALLBACK_TRACKS).map(normalizeTrack);
-          setSongs(fallbackSongs);
-          setArtists(extractArtists(fallbackSongs, FALLBACK_ALBUMS));
+          const data = await searchUnified(term, 20, source);
+          const dynamicSongs = (data?.songs && data.songs.length > 0 ? data.songs : FALLBACK_TRACKS).map(normalizeTrack);
+          setSongs(dynamicSongs);
+          setArtists(extractArtists(dynamicSongs, FALLBACK_ALBUMS));
           setAlbums(FALLBACK_ALBUMS);
           setPlaylists(FALLBACK_PLAYLISTS);
         }
