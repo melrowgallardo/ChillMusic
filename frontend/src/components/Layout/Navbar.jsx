@@ -57,12 +57,18 @@ const Navbar = () => {
           </IconButton>
         </Tooltip>
 
+        <Tooltip title="Settings">
+          <IconButton onClick={() => navigate('/settings')} sx={{ color: 'var(--text-secondary)' }}>
+            <SettingsIcon />
+          </IconButton>
+        </Tooltip>
+
         {user ? (
           <>
             <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0.5 }}>
               <Avatar
-                src={user.avatar_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`}
-                alt={user.username}
+                src={user.avatar_url || user.avatar || user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username || 'User'}`}
+                alt={user.username || 'User Profile'}
                 sx={{ width: 38, height: 38, border: '2px solid var(--accent-primary)' }}
               />
             </IconButton>
@@ -70,10 +76,10 @@ const Navbar = () => {
               <MenuItem
                 onClick={() => {
                   setAnchorEl(null);
-                  navigate('/profile');
+                  navigate('/settings');
                 }}
               >
-                <AccountCircleIcon sx={{ mr: 1.5, color: 'var(--text-secondary)' }} /> Profile & Settings
+                <SettingsIcon sx={{ mr: 1.5, color: 'var(--text-secondary)' }} /> Profile & Settings
               </MenuItem>
               <MenuItem
                 onClick={() => {

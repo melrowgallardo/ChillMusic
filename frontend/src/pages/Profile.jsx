@@ -19,6 +19,7 @@ import {
   IconButton,
   Grid,
 } from '@mui/material';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import SaveIcon from '@mui/icons-material/Save';
 import SyncIcon from '@mui/icons-material/Sync';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -79,11 +80,35 @@ const Profile = () => {
     setToast({ open: true, message, severity });
   };
 
+  const handleAvatarFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file', 'error');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Image file size must be under 5MB', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (reader.result) {
+        setAvatarUrl(reader.result);
+        showToast('Custom photo preview ready. Click Save Changes to apply!', 'info');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   useEffect(() => {
     if (user) {
       setUsername(user.username || user.displayName || '');
       setEmail(user.email || '');
-      setAvatarUrl(user.avatar_url || user.photoURL || PRESET_AVATARS[0]);
+      setAvatarUrl(user.avatar_url || user.avatar || user.photoURL || PRESET_AVATARS[0]);
 
       getUserSettings()
         .then((res) => setSettings(res))
@@ -112,6 +137,7 @@ const Profile = () => {
         username: username.trim(),
         email: email.trim(),
         avatar_url: avatarUrl,
+        avatar: avatarUrl,
       });
       showToast('Account details updated successfully!', 'success');
     } catch (err) {
@@ -231,12 +257,52 @@ const Profile = () => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {/* Avatar Preview & Selection */}
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <Avatar
-                src={avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`}
-                sx={{ width: 100, height: 100, border: '3px solid var(--accent-primary)', boxShadow: '0 0 20px rgba(124, 58, 237, 0.3)' }}
-              />
-              <Typography variant="caption" sx={{ color: 'var(--text-muted)' }}>
-                Choose an Avatar Preset
+              <Box sx={{ position: 'relative', display: 'inline-block' }}>
+                <Avatar
+                  src={avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`}
+                  sx={{ width: 105, height: 105, border: '3px solid var(--accent-primary)', boxShadow: '0 0 20px rgba(124, 58, 237, 0.4)' }}
+                />
+                <input
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  id="custom-avatar-upload"
+                  type="file"
+                  onChange={handleAvatarFileUpload}
+                />
+                <label htmlFor="custom-avatar-upload">
+                  <IconButton
+                    component="span"
+                    size="small"
+                    sx={{
+                      position: 'absolute',
+                      bottom: 0,
+                      right: 0,
+                      backgroundColor: 'var(--accent-primary)',
+                      color: '#ffffff',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                      '&:hover': { backgroundColor: 'var(--accent-pink)' },
+                    }}
+                  >
+                    <PhotoCameraIcon fontSize="small" />
+                  </IconButton>
+                </label>
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  htmlFor="custom-avatar-upload"
+                  size="small"
+                  startIcon={<PhotoCameraIcon />}
+                  sx={{ borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)', fontWeight: 600 }}
+                >
+                  Upload Custom Photo
+                </Button>
+              </Box>
+
+              <Typography variant="caption" sx={{ color: 'var(--text-muted)', mt: 1 }}>
+                Or choose an Avatar Preset:
               </Typography>
               <Box sx={{ display: 'flex', gap: 1.5 }}>
                 {PRESET_AVATARS.map((url, idx) => (
