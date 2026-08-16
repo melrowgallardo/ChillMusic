@@ -3,6 +3,7 @@ import { Box, Typography, TextField, Tabs, Tab, Chip, Grid, Button } from '@mui/
 import SearchIcon from '@mui/icons-material/Search';
 import { useSearchParams } from 'react-router-dom';
 import { searchFullTracks } from '../services/musicApi';
+import { searchYouTubeMusic } from '../services/youtubeApi';
 import TrackList from '../components/Track/TrackList';
 import ArtistCard from '../components/Artist/ArtistCard';
 import AlbumCard from '../components/Album/AlbumCard';
@@ -101,13 +102,16 @@ const Search = () => {
   }, [query]);
 
   const performSearch = async (searchTerm) => {
-    const term = (!searchTerm || !searchTerm.trim()) ? 'Top Hits' : searchTerm.trim();
+    const term = (!searchTerm || !searchTerm.trim()) ? 'Top Hits 2026' : searchTerm.trim();
     const currentReq = ++searchReqId.current;
     setLoading(true);
     try {
-      const saavnTracks = await searchFullTracks(term);
+      let tracks = await searchYouTubeMusic(term);
+      if (!tracks || tracks.length === 0) {
+        tracks = await searchFullTracks(term);
+      }
       if (currentReq === searchReqId.current) {
-        const dynamicSongs = (saavnTracks && saavnTracks.length > 0 ? saavnTracks : FALLBACK_TRACKS).map(normalizeTrack);
+        const dynamicSongs = (tracks && tracks.length > 0 ? tracks : FALLBACK_TRACKS).map(normalizeTrack);
         const { artists: dynamicArtists, albums: dynamicAlbums } = extractArtistsAndAlbums(dynamicSongs);
 
         setSongs(dynamicSongs);
