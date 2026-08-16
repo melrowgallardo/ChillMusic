@@ -1,66 +1,41 @@
 /**
  * Normalizes every track object cleanly across Search, Library, and Player.
  */
-export const normalizeTrack = (item) => {
-  if (!item) return null;
-
-  const id = String(item.trackId || item.id || item.key || Date.now());
-  const title = item.trackName || item.title || item.name || 'Unknown Title';
-  const artist = item.artistName || item.artist || item.artist_name || 'Unknown Artist';
-  const artist_name = item.artist_name || item.artistName || item.artist || 'Unknown Artist';
-  const album = item.collectionName || item.collectionCensoredName || item.album || item.album_name || item.album_title || 'Single';
-  const genre = item.primaryGenreName || item.genre || item.primary_genre || 'Music';
-
+export const normalizeTrack = (track) => {
+  if (!track) return null;
+  const audio = track.audioUrl || track.audio_url || track.streamUrl || track.stream_url || track.url || '';
   const rawCover =
-    item.cover ||
-    item.artworkUrl100?.replace('100x100bb', '300x300bb') ||
-    item.artworkUrl60?.replace('60x60bb', '300x300bb') ||
-    item.image_url ||
-    item.cover_url ||
-    item.image ||
-    item.artwork ||
+    track.cover ||
+    track.coverUrl ||
+    track.cover_url ||
+    track.image ||
+    track.image_url ||
+    track.artwork ||
     '/default-cover.png';
-
   const cover =
     typeof rawCover === 'string'
       ? rawCover.replace('100x100bb', '300x300bb').replace('1000x1000bb', '300x300bb')
       : '/default-cover.png';
-
-  const duration =
-    item.duration && item.duration > 35
-      ? item.duration
-      : item.trackTimeMillis
-      ? Math.floor(item.trackTimeMillis / 1000)
-      : item.duration || 210;
-
-  const rawAudio =
-    item.audio_url ||
-    item.audioUrl ||
-    item.stream_url ||
-    item.streamUrl ||
-    item.url ||
-    '';
-
-  const audioUrl = rawAudio || '';
+  const title = track.title || track.name || track.trackName || 'Unknown Track';
+  const artist = track.artist || track.artist_name || track.artistName || track.primaryArtists || 'Unknown Artist';
+  const album = track.album || track.album_name || track.collectionName || 'Single';
+  const duration = Number(track.duration) || (track.trackTimeMillis ? Math.floor(track.trackTimeMillis / 1000) : 200);
 
   return {
-    ...item,
-    id,
+    ...track,
+    id: String(track.id || track.trackId || Date.now() + Math.random()),
     title,
     artist,
-    artist_name,
+    artist_name: artist,
     album,
     album_name: album,
-    album_title: album,
-    genre,
-    cover,
-    image_url: cover,
-    cover_url: cover,
-    image: cover,
-    artwork: cover,
     duration,
-    audioUrl,
-    audio_url: audioUrl,
+    cover,
+    cover_url: cover,
+    image_url: cover,
+    image: cover,
+    audioUrl: audio,
+    audio_url: audio,
   };
 };
 

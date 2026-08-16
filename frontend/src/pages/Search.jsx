@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Box, Typography, TextField, Tabs, Tab, Chip, Grid, Button } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { useSearchParams } from 'react-router-dom';
-import { searchUnified } from '../services/jamendo';
 import { searchFullTracks } from '../services/musicApi';
 import TrackList from '../components/Track/TrackList';
 import ArtistCard from '../components/Artist/ArtistCard';
@@ -15,30 +14,59 @@ import { normalizeTrack } from '../utils/trackUtils';
 
 const GENRE_TAGS = ['Chill', 'Lofi', 'Ambient', 'Electronic', 'Jazz', 'Rock', 'Pop', 'Acoustic', 'Piano', 'Hip Hop'];
 
-const extractArtists = (songsList = [], albumsList = []) => {
-  const map = new Map();
-  [...songsList, ...albumsList].forEach((item) => {
-    if (!item) return;
-    const name = (item.artist_name || item.artist || item.primaryArtists || '').trim();
-    if (!name || name === 'Various Artists' || name === 'Unknown Artist') return;
-    const key = name.toLowerCase();
-    const cover = item.image_url || item.cover_url || item.coverUrl || item.image || item.artwork;
+const extractArtistsAndAlbums = (songsList = []) => {
+  const artistMap = new Map();
+  const albumMap = new Map();
 
-    if (!map.has(key)) {
-      map.set(key, {
-        id: `ext_art_${key.replace(/[^a-z0-9]/g, '_')}`,
-        name: name,
-        imageUrl: cover || '',
-        image_url: cover || '',
-        cover_url: cover || '',
-        image: cover || '',
-        genres: item.genre || item.genres || 'Artist',
-        followers: null,
-        type: 'Artist',
-      });
+  songsList.forEach((item) => {
+    if (!item) return;
+
+    // Extract Artist
+    const artistName = (item.artist || item.artist_name || item.primaryArtists || '').trim();
+    if (artistName && artistName !== 'Various Artists' && artistName !== 'Unknown Artist') {
+      const artKey = artistName.toLowerCase();
+      const cover = item.cover || item.cover_url || item.image_url || item.image || item.artwork;
+      if (!artistMap.has(artKey)) {
+        artistMap.set(artKey, {
+          id: `art_${artKey.replace(/[^a-z0-9]/g, '_')}`,
+          name: artistName,
+          imageUrl: cover || '',
+          image_url: cover || '',
+          cover_url: cover || '',
+          image: cover || '',
+          genres: item.genre || 'Artist',
+          followers: null,
+          type: 'Artist',
+        });
+      }
+    }
+
+    // Extract Album
+    const albumName = (item.album || item.album_name || '').trim();
+    if (albumName && albumName !== 'Single') {
+      const albKey = albumName.toLowerCase();
+      const cover = item.cover || item.cover_url || item.image_url || item.image || item.artwork;
+      if (!albumMap.has(albKey)) {
+        albumMap.set(albKey, {
+          id: `alb_${albKey.replace(/[^a-z0-9]/g, '_')}`,
+          name: albumName,
+          title: albumName,
+          artist_name: artistName || 'Various Artists',
+          artist: artistName || 'Various Artists',
+          cover_url: cover || '',
+          image_url: cover || '',
+          cover: cover || '',
+          image: cover || '',
+          release_date: '2024',
+        });
+      }
     }
   });
-  return Array.from(map.values());
+
+  return {
+    artists: Array.from(artistMap.values()),
+    albums: Array.from(albumMap.values()),
+  };
 };
 
 const Search = () => {
@@ -46,7 +74,6 @@ const Search = () => {
   const initialQuery = searchParams.get('q') || '';
   const [query, setQuery] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState(0); // 0: Songs, 1: Artists, 2: Albums, 3: Playlists
-  const [musicSource, setMusicSource] = useState('all'); // 'all' | 'jamendo' | 'youtube' | 'deezer'
   const [songs, setSongs] = useState([]);
   const [artists, setArtists] = useState([]);
   const [albums, setAlbums] = useState([]);
@@ -58,11 +85,11 @@ const Search = () => {
     const q = searchParams.get('q');
     if (q) {
       setQuery(q);
-      performSearch(q, musicSource);
+      performSearch(q);
     } else {
-      performSearch(query, musicSource);
+      performSearch(query);
     }
-  }, [searchParams, musicSource]);
+  }, [searchParams]);
 
   // Debounced live typing search (500ms optimal typing balance)
   useEffect(() => {
@@ -73,35 +100,29 @@ const Search = () => {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const performSearch = async (searchTerm, source = 'all') => {
+  const performSearch = async (searchTerm) => {
     const term = (!searchTerm || !searchTerm.trim()) ? 'Top Hits' : searchTerm.trim();
     const currentReq = ++searchReqId.current;
     setLoading(true);
     try {
       const saavnTracks = await searchFullTracks(term);
       if (currentReq === searchReqId.current) {
-        if (saavnTracks && saavnTracks.length > 0) {
-          const dynamicSongs = saavnTracks.map(normalizeTrack);
-          const dynamicArtists = extractArtists(dynamicSongs, []);
-          setSongs(dynamicSongs);
-          setArtists(dynamicArtists);
-          setAlbums(FALLBACK_ALBUMS);
-          setPlaylists(FALLBACK_PLAYLISTS);
-        } else {
-          const data = await searchUnified(term, 20, source);
-          const dynamicSongs = (data?.songs && data.songs.length > 0 ? data.songs : FALLBACK_TRACKS).map(normalizeTrack);
-          setSongs(dynamicSongs);
-          setArtists(extractArtists(dynamicSongs, FALLBACK_ALBUMS));
-          setAlbums(FALLBACK_ALBUMS);
-          setPlaylists(FALLBACK_PLAYLISTS);
-        }
+        const dynamicSongs = (saavnTracks && saavnTracks.length > 0 ? saavnTracks : FALLBACK_TRACKS).map(normalizeTrack);
+        const { artists: dynamicArtists, albums: dynamicAlbums } = extractArtistsAndAlbums(dynamicSongs);
+
+        setSongs(dynamicSongs);
+        setArtists(dynamicArtists.length > 0 ? dynamicArtists : extractArtistsAndAlbums(FALLBACK_TRACKS).artists);
+        setAlbums(dynamicAlbums.length > 0 ? dynamicAlbums : FALLBACK_ALBUMS);
+        setPlaylists(FALLBACK_PLAYLISTS);
       }
     } catch (err) {
       console.error('Search failed:', err);
       if (currentReq === searchReqId.current) {
-        setSongs(FALLBACK_TRACKS.map(normalizeTrack));
-        setArtists(extractArtists(FALLBACK_TRACKS, FALLBACK_ALBUMS));
-        setAlbums(FALLBACK_ALBUMS);
+        const fallbackSongs = FALLBACK_TRACKS.map(normalizeTrack);
+        const { artists: fallbackArtists, albums: fallbackAlbums } = extractArtistsAndAlbums(fallbackSongs);
+        setSongs(fallbackSongs);
+        setArtists(fallbackArtists);
+        setAlbums(fallbackAlbums.length > 0 ? fallbackAlbums : FALLBACK_ALBUMS);
         setPlaylists(FALLBACK_PLAYLISTS);
       }
     } finally {
