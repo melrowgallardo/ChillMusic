@@ -4,27 +4,23 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import HistoryIcon from '@mui/icons-material/History';
-import { getTrendingSongs, getNewReleases, getRecommendations, searchPlaylists, searchArtists } from '../services/jamendo';
-import { getYouTubeTrending } from '../services/youtube';
-import { searchFullTracks } from '../services/musicApi';
-import { normalizeTrack } from '../utils/trackUtils';
+import { searchYouTubeMusic, searchYouTubePlaylists } from '../services/youtubeApi';
+import { searchArtists } from '../services/jamendo';
 import TrackCard from '../components/Track/TrackCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
 import ArtistCard from '../components/Artist/ArtistCard';
 import AudioVisualizer from '../components/Player/AudioVisualizer';
 import { usePlayer } from '../context/PlayerContext';
-import { cacheSongsLocally } from '../services/offlineSync';
 import { getHistory } from '../services/firestoreService';
-import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS } from '../services/mockData';
 
 const Home = () => {
   const { playTrack, currentTrack, isPlaying, togglePlayPause, recentlyPlayed } = usePlayer();
   const [recentTracks, setRecentTracks] = useState([]);
-  const [trending, setTrending] = useState(FALLBACK_TRACKS);
-  const [youtubeHits, setYoutubeHits] = useState(FALLBACK_TRACKS);
-  const [newReleases, setNewReleases] = useState(FALLBACK_TRACKS);
-  const [recommendations, setRecommendations] = useState(FALLBACK_TRACKS);
-  const [playlists, setPlaylists] = useState(FALLBACK_PLAYLISTS);
+  const [hitsTracks, setHitsTracks] = useState([]);
+  const [trendingTracks, setTrendingTracks] = useState([]);
+  const [newReleaseTracks, setNewReleaseTracks] = useState([]);
+  const [chillTracks, setChillTracks] = useState([]);
+  const [featuredPlaylists, setFeaturedPlaylists] = useState([]);
   const [artists, setArtists] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,6 +30,8 @@ const Home = () => {
     let isMounted = true;
 
     const loadAllData = async () => {
+      setLoading(true);
+
       // 1. Fetch Recently Played History
       try {
         const historyData = await getHistory(15);
@@ -60,55 +58,36 @@ const Home = () => {
         console.warn('Could not fetch online history:', err);
       }
 
-      // 2. Fetch YouTube Hits (fast)
+      // 2. Fetch YouTube Categories & Playlists dynamically via YouTube Data API
       try {
-        const ytData = await getYouTubeTrending(6);
-        if (isMounted) {
-          if (ytData && ytData.length > 0) {
-            setYoutubeHits(ytData);
-          }
-          setLoading(false);
-        }
-      } catch (err) {
-        console.warn('YouTube trending fetch error:', err);
-      }
-
-      // 3. Fetch Full-Length Saavn Pop Hits Trending
-      try {
-        const saavnHits = await searchFullTracks('pop hits');
-        if (isMounted && saavnHits && saavnHits.length > 0) {
-          const normHits = saavnHits.map(normalizeTrack);
-          setTrending(normHits);
-          cacheSongsLocally(normHits);
-          setLoading(false);
-        } else {
-          const trData = await getTrendingSongs(10);
-          if (isMounted && trData && trData.length > 0) {
-            setTrending(trData);
-          }
-        }
-      } catch (err) {
-        console.warn('Trending fetch error:', err);
-      }
-
-      // 4. Fetch remainder progressively
-      try {
-        const [nrData, recData, plData, artData] = await Promise.all([
-          getNewReleases(10).catch(() => FALLBACK_TRACKS),
-          getRecommendations('chill', 10).catch(() => FALLBACK_TRACKS),
-          searchPlaylists('chill', 6).catch(() => FALLBACK_PLAYLISTS),
+        const [hitsRes, newRelRes, chillRes, playlistsRes, artistsRes] = await Promise.all([
+          searchYouTubeMusic('Top Global Hits 2026').catch(() => []),
+          searchYouTubeMusic('New Pop Releases 2026').catch(() => []),
+          searchYouTubeMusic('Lofi Chill Beats Relax').catch(() => []),
+          searchYouTubePlaylists('Top Hits Playlist').catch(() => []),
           searchArtists('lofi', 6).catch(() => []),
         ]);
 
         if (isMounted) {
-          if (nrData && nrData.length > 0) setNewReleases(nrData);
-          if (recData && recData.length > 0) setRecommendations(recData);
-          if (plData && plData.length > 0) setPlaylists(plData);
-          if (artData && artData.length > 0) setArtists(artData);
-          setLoading(false);
+          if (hitsRes && hitsRes.length > 0) {
+            setHitsTracks(hitsRes);
+            setTrendingTracks(hitsRes.length > 6 ? hitsRes.slice(6) : hitsRes);
+          }
+          if (newRelRes && newRelRes.length > 0) {
+            setNewReleaseTracks(newRelRes);
+          }
+          if (chillRes && chillRes.length > 0) {
+            setChillTracks(chillRes);
+          }
+          if (playlistsRes && playlistsRes.length > 0) {
+            setFeaturedPlaylists(playlistsRes);
+          }
+          if (artistsRes && artistsRes.length > 0) {
+            setArtists(artistsRes);
+          }
         }
       } catch (err) {
-        console.warn('Progressive data load error:', err);
+        console.error('Error fetching homepage YouTube categories:', err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -121,9 +100,21 @@ const Home = () => {
     };
   }, []);
 
-  const heroTrack = currentTrack || (trending && trending.length > 0 ? trending[0] : null) || (youtubeHits && youtubeHits.length > 0 ? youtubeHits[0] : null) || FALLBACK_TRACKS[0];
+  const heroTrack =
+    currentTrack ||
+    (hitsTracks && hitsTracks.length > 0 ? hitsTracks[0] : null) ||
+    (trendingTracks && trendingTracks.length > 0 ? trendingTracks[0] : null) ||
+    (newReleaseTracks && newReleaseTracks.length > 0 ? newReleaseTracks[0] : null) ||
+    (chillTracks && chillTracks.length > 0 ? chillTracks[0] : null);
 
-  const trackPool = (trending && trending.length > 0) ? trending : ((youtubeHits && youtubeHits.length > 0) ? youtubeHits : FALLBACK_TRACKS);
+  const trackPool =
+    hitsTracks.length > 0
+      ? hitsTracks
+      : trendingTracks.length > 0
+      ? trendingTracks
+      : newReleaseTracks.length > 0
+      ? newReleaseTracks
+      : chillTracks;
 
   const isCurrentHeroTrack = Boolean(
     currentTrack && heroTrack && String(currentTrack.id) === String(heroTrack.id)
@@ -133,7 +124,7 @@ const Home = () => {
   const handleBannerPlayClick = () => {
     if (isCurrentHeroTrack) {
       togglePlayPause();
-    } else {
+    } else if (heroTrack) {
       playTrack(heroTrack, trackPool, 0);
     }
   };
@@ -206,8 +197,10 @@ const Home = () => {
                 variant="outlined"
                 startIcon={<ShuffleIcon />}
                 onClick={() => {
-                  const randomIdx = Math.floor(Math.random() * trackPool.length);
-                  playTrack(trackPool[randomIdx], trackPool, randomIdx);
+                  if (trackPool && trackPool.length > 0) {
+                    const randomIdx = Math.floor(Math.random() * trackPool.length);
+                    playTrack(trackPool[randomIdx], trackPool, randomIdx);
+                  }
                 }}
                 sx={{
                   borderColor: 'var(--border-color)',
@@ -234,8 +227,9 @@ const Home = () => {
             <Box
               component="img"
               src={
-                heroTrack.image_url ||
+                heroTrack.cover ||
                 heroTrack.cover_url ||
+                heroTrack.image_url ||
                 heroTrack.image ||
                 heroTrack.artwork ||
                 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80'
@@ -298,15 +292,15 @@ const Home = () => {
       )}
 
       {/* YouTube Music Hits Section */}
-      {youtubeHits.length > 0 && (
+      {hitsTracks.length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             📺 YouTube Music Hits
           </Typography>
           <Box sx={{ display: 'flex', gap: 2.5, overflowX: 'auto', pb: 2, scrollSnapType: 'x mandatory', '&::-webkit-scrollbar': { display: 'none' }, WebkitOverflowScrolling: 'touch', mx: -2, px: 2 }}>
-            {youtubeHits.slice(0, 6).map((track) => (
+            {hitsTracks.slice(0, 10).map((track) => (
               <Box key={`yt-${track.id}`} sx={{ minWidth: { xs: 150, sm: 180, md: 200 }, scrollSnapAlign: 'start' }}>
-                <TrackCard track={track} queue={youtubeHits} />
+                <TrackCard track={track} queue={hitsTracks} />
               </Box>
             ))}
           </Box>
@@ -314,31 +308,31 @@ const Home = () => {
       )}
 
       {/* Trending Section */}
-      {trending.length > 0 ? (
+      {trendingTracks.length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             🔥 Trending Songs
           </Typography>
           <Box sx={{ display: 'flex', gap: 2.5, overflowX: 'auto', pb: 2, scrollSnapType: 'x mandatory', '&::-webkit-scrollbar': { display: 'none' }, WebkitOverflowScrolling: 'touch', mx: -2, px: 2 }}>
-            {trending.slice(0, 6).map((track) => (
+            {trendingTracks.slice(0, 10).map((track) => (
               <Box key={`tr-${track.id}`} sx={{ minWidth: { xs: 150, sm: 180, md: 200 }, scrollSnapAlign: 'start' }}>
-                <TrackCard track={track} queue={trending} />
+                <TrackCard track={track} queue={trendingTracks} />
               </Box>
             ))}
           </Box>
         </Box>
-      ) : null}
+      )}
 
       {/* New Releases Section */}
-      {newReleases.length > 0 && (
+      {newReleaseTracks.length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             ✨ New Releases
           </Typography>
           <Grid container spacing={2.5}>
-            {newReleases.slice(0, 6).map((track) => (
+            {newReleaseTracks.slice(0, 12).map((track) => (
               <Grid item xs={6} sm={4} md={2} key={`nr-${track.id}`}>
-                <TrackCard track={track} queue={newReleases} />
+                <TrackCard track={track} queue={newReleaseTracks} />
               </Grid>
             ))}
           </Grid>
@@ -346,15 +340,15 @@ const Home = () => {
       )}
 
       {/* Recommendations */}
-      {recommendations.length > 0 && (
+      {chillTracks.length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             🎧 Recommended Chill Vibes
           </Typography>
           <Grid container spacing={2.5}>
-            {recommendations.slice(0, 6).map((track) => (
-              <Grid item xs={6} sm={4} md={2} key={`rec-${track.id}`}>
-                <TrackCard track={track} queue={recommendations} />
+            {chillTracks.slice(0, 12).map((track) => (
+              <Grid item xs={6} sm={4} md={2} key={`chill-${track.id}`}>
+                <TrackCard track={track} queue={chillTracks} />
               </Grid>
             ))}
           </Grid>
@@ -362,13 +356,13 @@ const Home = () => {
       )}
 
       {/* Featured Playlists */}
-      {playlists.length > 0 && (
+      {featuredPlaylists.length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             🎶 Featured Playlists
           </Typography>
           <Grid container spacing={2.5}>
-            {playlists.map((playlist) => (
+            {featuredPlaylists.map((playlist) => (
               <Grid item xs={6} sm={4} md={2} key={`pl-${playlist.id}`}>
                 <PlaylistCard playlist={playlist} />
               </Grid>
@@ -397,3 +391,4 @@ const Home = () => {
 };
 
 export default Home;
+
