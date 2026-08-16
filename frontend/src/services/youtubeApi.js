@@ -280,6 +280,52 @@ export const fetchDiverseCategory = async (queriesList) => {
   return results.filter(Boolean);
 };
 
+export const POOL_OF_TRENDING_SETS = [
+  // Set A: Pop & Viral Hits
+  ['Die With A Smile Bruno Mars Lady Gaga', 'Espresso Sabrina Carpenter', 'Cruel Summer Taylor Swift', 'Greedy Tate McRae', 'Flowers Miley Cyrus', 'Vampire Olivia Rodrigo'],
+  // Set B: R&B & Hip-Hop Chill
+  ['Blinding Lights The Weeknd', 'Snooze SZA', 'Kill Bill SZA', 'Golden Hour JVKE', 'Starboy The Weeknd', 'Daylight David Kushner'],
+  // Set C: Acoustic & Chill Vibes
+  ['Until I Found You Stephen Sanchez', 'Riptide Vance Joy', 'Here With Me d4vd', 'Glimpse of Us Joji', 'Romantic Homicide d4vd', 'Sweater Weather The Neighbourhood'],
+  // Set D: Global & Indie Hits
+  ['Birds of a Feather Billie Eilish', 'As It Was Harry Styles', 'Seven Jungkook', 'Too Sweet Hozier', 'Water Tyla', 'Good Luck Babe Chappell Roan']
+];
+
+export const getPersonalizedQueriesForUser = (user, recentlyPlayed = [], favorites = []) => {
+  const userId = user?.uid || user?.id || user?.email || 'guest';
+
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = (hash << 5) - hash + userId.charCodeAt(i);
+    hash |= 0;
+  }
+  const seed = Math.abs(hash);
+
+  const poolIndex = seed % POOL_OF_TRENDING_SETS.length;
+  let baseSet = [...POOL_OF_TRENDING_SETS[poolIndex]];
+
+  // Rotate/shuffle based on seed
+  const rotation = seed % baseSet.length;
+  baseSet = [...baseSet.slice(rotation), ...baseSet.slice(0, rotation)];
+
+  // Inject top recent or favorite artist query if available
+  const topArtist =
+    recentlyPlayed?.[0]?.artist_name ||
+    recentlyPlayed?.[0]?.artist ||
+    favorites?.[0]?.artist_name ||
+    favorites?.[0]?.artist;
+
+  if (topArtist && topArtist.toLowerCase() !== 'unknown' && topArtist.toLowerCase() !== 'featured artist') {
+    const artistQuery = `${topArtist} popular songs`;
+    if (!baseSet.includes(artistQuery)) {
+      baseSet.unshift(artistQuery);
+    }
+  }
+
+  return baseSet.slice(0, 8);
+};
+
+
 
 
 

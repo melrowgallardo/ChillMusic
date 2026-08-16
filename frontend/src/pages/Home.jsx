@@ -4,17 +4,27 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import HistoryIcon from '@mui/icons-material/History';
-import { searchYouTubeMusic, searchYouTubePlaylists, fetchDiverseCategory, HIT_QUERIES, NEW_RELEASE_QUERIES, CHILL_QUERIES } from '../services/youtubeApi';
+import {
+  searchYouTubeMusic,
+  searchYouTubePlaylists,
+  fetchDiverseCategory,
+  HIT_QUERIES,
+  NEW_RELEASE_QUERIES,
+  CHILL_QUERIES,
+  getPersonalizedQueriesForUser,
+} from '../services/youtubeApi';
 import { searchArtists } from '../services/jamendo';
 import TrackCard from '../components/Track/TrackCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
 import ArtistCard from '../components/Artist/ArtistCard';
 import AudioVisualizer from '../components/Player/AudioVisualizer';
 import { usePlayer } from '../context/PlayerContext';
+import { useAuth } from '../context/AuthContext';
 import { getHistory } from '../services/firestoreService';
 
 const Home = () => {
-  const { playTrack, currentTrack, isPlaying, togglePlayPause, recentlyPlayed } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlayPause, recentlyPlayed, favorites } = usePlayer();
+  const { user } = useAuth();
   const [recentTracks, setRecentTracks] = useState([]);
   const [hitsTracks, setHitsTracks] = useState([]);
   const [trendingTracks, setTrendingTracks] = useState([]);
@@ -31,6 +41,31 @@ const Home = () => {
 
     const loadAllData = async () => {
       setLoading(true);
+
+      const userKey = user?.uid || user?.id || user?.email || 'guest';
+      const cacheKey = `home_feed_${userKey}`;
+
+      // Check sessionStorage cache for per-user feed
+      try {
+        const cachedData = sessionStorage.getItem(cacheKey);
+        if (cachedData) {
+          const parsed = JSON.parse(cachedData);
+          if (parsed && parsed.hitsTracks && parsed.hitsTracks.length > 0) {
+            if (isMounted) {
+              setHitsTracks(parsed.hitsTracks);
+              setTrendingTracks(parsed.trendingTracks || [...parsed.hitsTracks].reverse());
+              setNewReleaseTracks(parsed.newReleaseTracks || []);
+              setChillTracks(parsed.chillTracks || []);
+              setFeaturedPlaylists(parsed.featuredPlaylists || []);
+              if (parsed.artists) setArtists(parsed.artists);
+              setLoading(false);
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        sessionStorage.removeItem(cacheKey);
+      }
 
       // 1. Fetch Recently Played History
       try {
@@ -58,10 +93,11 @@ const Home = () => {
         console.warn('Could not fetch online history:', err);
       }
 
-      // 2. Fetch YouTube Categories & Playlists dynamically via YouTube Data API
+      // 2. Fetch Personalized YouTube Categories & Playlists dynamically via YouTube Data API
       try {
+        const userQueries = getPersonalizedQueriesForUser(user, recentlyPlayed, favorites);
         const [hitsRes, newRelRes, chillRes, playlistsRes, artistsRes] = await Promise.all([
-          fetchDiverseCategory(HIT_QUERIES).catch(() => []),
+          fetchDiverseCategory(userQueries).catch(() => []),
           fetchDiverseCategory(NEW_RELEASE_QUERIES).catch(() => []),
           fetchDiverseCategory(CHILL_QUERIES).catch(() => []),
           searchYouTubePlaylists('Top Hits Playlist').catch(() => []),
@@ -69,22 +105,34 @@ const Home = () => {
         ]);
 
         if (isMounted) {
-          if (hitsRes && hitsRes.length > 0) {
-            setHitsTracks(hitsRes);
-            setTrendingTracks([...hitsRes].reverse());
-          }
-          if (newRelRes && newRelRes.length > 0) {
-            setNewReleaseTracks(newRelRes);
-          }
-          if (chillRes && chillRes.length > 0) {
-            setChillTracks(chillRes);
-          }
-          if (playlistsRes && playlistsRes.length > 0) {
-            setFeaturedPlaylists(playlistsRes);
-          }
+          const hits = hitsRes.length > 0 ? hitsRes : [];
+          const trending = hits.length > 0 ? [...hits].reverse() : [];
+          const newRel = newRelRes.length > 0 ? newRelRes : [];
+          const chill = chillRes.length > 0 ? chillRes : [];
+          const playlists = playlistsRes.length > 0 ? playlistsRes : [];
+
+          setHitsTracks(hits);
+          setTrendingTracks(trending);
+          setNewReleaseTracks(newRel);
+          setChillTracks(chill);
+          setFeaturedPlaylists(playlists);
           if (artistsRes && artistsRes.length > 0) {
             setArtists(artistsRes);
           }
+
+          try {
+            sessionStorage.setItem(
+              cacheKey,
+              JSON.stringify({
+                hitsTracks: hits,
+                trendingTracks: trending,
+                newReleaseTracks: newRel,
+                chillTracks: chill,
+                featuredPlaylists: playlists,
+                artists: artistsRes || [],
+              })
+            );
+          } catch (e) {}
         }
       } catch (err) {
         console.error('Error fetching homepage YouTube categories:', err);
@@ -98,7 +146,7 @@ const Home = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user]);
 
   const heroTrack =
     currentTrack ||
