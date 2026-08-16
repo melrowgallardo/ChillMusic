@@ -47,3 +47,36 @@ export const searchYouTubeMusic = async (query) => {
     return [];
   }
 };
+
+export const searchYouTubePlaylists = async (query) => {
+  try {
+    const term = query?.trim() ? `${query.trim()} playlist` : 'Top Music Playlists 2026';
+    const apiKey =
+      import.meta.env.VITE_YOUTUBE_API_KEY ||
+      import.meta.env.YOUTUBE_API_KEY ||
+      'AIzaSyAVW_86xvVRgRWu25NFhyiPGBSpuHx_BvA';
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=playlist&maxResults=12&q=${encodeURIComponent(term)}&key=${apiKey}`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data?.items) return [];
+
+    return data.items.map((item) => ({
+      id: item.id.playlistId,
+      playlistId: item.id.playlistId,
+      title: item.snippet.title
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&'),
+      creator: item.snippet.channelTitle,
+      user_name: item.snippet.channelTitle,
+      cover: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url || '',
+      cover_url: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.medium?.url || '',
+      type: 'Playlist',
+    }));
+  } catch (err) {
+    console.error('YouTube playlist search error:', err);
+    return [];
+  }
+};
+

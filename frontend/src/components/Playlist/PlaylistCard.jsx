@@ -5,14 +5,15 @@ import { useNavigate } from 'react-router-dom';
 const PlaylistCard = ({ playlist }) => {
   const navigate = useNavigate();
 
-  const cover = playlist.cover_url || playlist.zip || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80';
-  const name = playlist.title || playlist.name;
-  const owner = playlist.user_name || 'ChillMusic User';
+  const playlistId = playlist.playlistId || playlist.id;
+  const cover = playlist.cover || playlist.cover_url || playlist.image || playlist.zip || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80';
+  const name = playlist.title || playlist.name || 'Untitled Playlist';
+  const owner = playlist.creator || playlist.author || playlist.user_name || playlist.channelTitle || 'ChillMusic User';
 
   return (
     <Box
       className="glass-card"
-      onClick={() => navigate(`/playlist/${playlist.id}`)}
+      onClick={() => navigate(`/playlist/${playlistId}`)}
       sx={{
         padding: '14px',
         display: 'flex',

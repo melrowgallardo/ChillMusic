@@ -3,7 +3,7 @@ import { Box, Typography, TextField, Tabs, Tab, Chip, Grid, Button } from '@mui/
 import SearchIcon from '@mui/icons-material/Search';
 import { useSearchParams } from 'react-router-dom';
 import { searchFullTracks } from '../services/musicApi';
-import { searchYouTubeMusic } from '../services/youtubeApi';
+import { searchYouTubeMusic, searchYouTubePlaylists } from '../services/youtubeApi';
 import TrackList from '../components/Track/TrackList';
 import ArtistCard from '../components/Artist/ArtistCard';
 import AlbumCard from '../components/Album/AlbumCard';
@@ -106,18 +106,25 @@ const Search = () => {
     const currentReq = ++searchReqId.current;
     setLoading(true);
     try {
-      let tracks = await searchYouTubeMusic(term);
+      const [tracksRes, playlistsRes] = await Promise.all([
+        searchYouTubeMusic(term).catch(() => []),
+        searchYouTubePlaylists(term).catch(() => []),
+      ]);
+
+      let tracks = tracksRes;
       if (!tracks || tracks.length === 0) {
-        tracks = await searchFullTracks(term);
+        tracks = await searchFullTracks(term).catch(() => []);
       }
+
       if (currentReq === searchReqId.current) {
         const dynamicSongs = (tracks && tracks.length > 0 ? tracks : FALLBACK_TRACKS).map(normalizeTrack);
         const { artists: dynamicArtists, albums: dynamicAlbums } = extractArtistsAndAlbums(dynamicSongs);
+        const dynamicPlaylists = playlistsRes && playlistsRes.length > 0 ? playlistsRes : FALLBACK_PLAYLISTS;
 
         setSongs(dynamicSongs);
         setArtists(dynamicArtists.length > 0 ? dynamicArtists : extractArtistsAndAlbums(FALLBACK_TRACKS).artists);
         setAlbums(dynamicAlbums.length > 0 ? dynamicAlbums : FALLBACK_ALBUMS);
-        setPlaylists(FALLBACK_PLAYLISTS);
+        setPlaylists(dynamicPlaylists);
       }
     } catch (err) {
       console.error('Search failed:', err);
