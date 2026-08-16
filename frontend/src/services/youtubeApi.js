@@ -236,5 +236,50 @@ export const getYouTubePlaylistDetails = async (playlistId) => {
   }
 };
 
+export const HIT_QUERIES = [
+  'Die With A Smile Bruno Mars Lady Gaga official',
+  'Espresso Sabrina Carpenter official',
+  'Birds of a Feather Billie Eilish official',
+  'Cruel Summer Taylor Swift official',
+  'Blinding Lights The Weeknd official',
+  'As It Was Harry Styles official',
+  'Seven Jungkook Latto official',
+  'Greedy Tate McRae official',
+];
+
+export const NEW_RELEASE_QUERIES = [
+  'Sabrina Carpenter Taste official audio',
+  'Billie Eilish Wildflower official audio',
+  'The Weeknd Timeless official audio',
+  'Chappell Roan Good Luck Babe official audio',
+  'Gracie Abrams Us official audio',
+  'Katy Perry Lifetimes official audio',
+];
+
+export const CHILL_QUERIES = [
+  'Lofi Hip Hop beats to relax study to',
+  'Coffee shop acoustic guitar chill vibes',
+  'Night drives lofi aesthetic music',
+  'Peaceful piano relaxation instrumental',
+  'Sunday morning chill acoustic songs',
+  'Midnight lofi ambient vibes',
+];
+
+export const fetchDiverseCategory = async (queriesList) => {
+  if (!queriesList || !Array.isArray(queriesList)) return [];
+  const results = await Promise.all(
+    queriesList.map(async (query) => {
+      try {
+        const tracks = await searchYouTubeMusic(query);
+        return tracks?.[0] || null;
+      } catch (e) {
+        return null;
+      }
+    })
+  );
+  return results.filter(Boolean);
+};
+
+
 
 

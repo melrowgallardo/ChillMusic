@@ -4,7 +4,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 import ShuffleIcon from '@mui/icons-material/Shuffle';
 import HistoryIcon from '@mui/icons-material/History';
-import { searchYouTubeMusic, searchYouTubePlaylists } from '../services/youtubeApi';
+import { searchYouTubeMusic, searchYouTubePlaylists, fetchDiverseCategory, HIT_QUERIES, NEW_RELEASE_QUERIES, CHILL_QUERIES } from '../services/youtubeApi';
 import { searchArtists } from '../services/jamendo';
 import TrackCard from '../components/Track/TrackCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
@@ -60,11 +60,10 @@ const Home = () => {
 
       // 2. Fetch YouTube Categories & Playlists dynamically via YouTube Data API
       try {
-        const [hitsRes, trendingRes, newRelRes, chillRes, playlistsRes, artistsRes] = await Promise.all([
-          searchYouTubeMusic('Sabrina Carpenter Espresso').catch(() => []),
-          searchYouTubeMusic('Bruno Mars Die With A Smile').catch(() => []),
-          searchYouTubeMusic('Taylor Swift Fortnight').catch(() => []),
-          searchYouTubeMusic('Lofi Chill Beats Relax').catch(() => []),
+        const [hitsRes, newRelRes, chillRes, playlistsRes, artistsRes] = await Promise.all([
+          fetchDiverseCategory(HIT_QUERIES).catch(() => []),
+          fetchDiverseCategory(NEW_RELEASE_QUERIES).catch(() => []),
+          fetchDiverseCategory(CHILL_QUERIES).catch(() => []),
           searchYouTubePlaylists('Top Hits Playlist').catch(() => []),
           searchArtists('lofi', 6).catch(() => []),
         ]);
@@ -72,11 +71,7 @@ const Home = () => {
         if (isMounted) {
           if (hitsRes && hitsRes.length > 0) {
             setHitsTracks(hitsRes);
-          }
-          if (trendingRes && trendingRes.length > 0) {
-            setTrendingTracks(trendingRes);
-          } else if (hitsRes && hitsRes.length > 6) {
-            setTrendingTracks(hitsRes.slice(6));
+            setTrendingTracks([...hitsRes].reverse());
           }
           if (newRelRes && newRelRes.length > 0) {
             setNewReleaseTracks(newRelRes);
