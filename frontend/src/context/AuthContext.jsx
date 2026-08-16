@@ -5,8 +5,13 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
+  updateEmail,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  deleteUser,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -98,16 +103,57 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateUserProfile = async (updatedUser) => {
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    if (user && user.uid) {
+  const updateUserProfile = async (updates) => {
+    const mergedUser = { ...user, ...updates };
+    setUser(mergedUser);
+    localStorage.setItem('user', JSON.stringify(mergedUser));
+
+    if (auth.currentUser && updates.email && updates.email !== auth.currentUser.email) {
       try {
-        await setDoc(doc(db, 'users', user.uid), updatedUser, { merge: true });
+        await updateEmail(auth.currentUser, updates.email);
+      } catch (err) {
+        console.warn('Firebase email update warning:', err);
+      }
+    }
+
+    const uid = user?.uid || user?.id || auth.currentUser?.uid;
+    if (uid) {
+      try {
+        await setDoc(doc(db, 'users', uid), updates, { merge: true });
       } catch (err) {
         console.error('Failed to update profile in Firestore:', err);
       }
     }
+    return mergedUser;
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    if (!auth.currentUser) {
+      throw new Error('No active user session found.');
+    }
+    if (currentPassword && auth.currentUser.email) {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, currentPassword);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+    }
+    await updatePassword(auth.currentUser, newPassword);
+  };
+
+  const deleteAccount = async () => {
+    const uid = user?.uid || user?.id || auth.currentUser?.uid;
+    if (uid) {
+      try {
+        await deleteDoc(doc(db, 'users', uid));
+      } catch (e) {
+        console.warn('Could not delete user doc in Firestore:', e);
+      }
+    }
+    if (auth.currentUser) {
+      await deleteUser(auth.currentUser);
+    }
+    setUser(null);
+    setToken(null);
+    localStorage.clear();
+    sessionStorage.clear();
   };
 
   return (
@@ -121,6 +167,8 @@ export const AuthProvider = ({ children }) => {
         register,
         logout,
         updateUserProfile,
+        changePassword,
+        deleteAccount,
       }}
     >
       {children}
@@ -129,3 +177,4 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
