@@ -12,6 +12,7 @@ import { normalizeTrack } from '../utils/trackUtils';
 const PlayerContext = createContext();
 
 export const PlayerProvider = ({ children }) => {
+  const { user } = useAuth();
   const audioRef = useRef(new Audio());
   const ytPlayerRef = useRef(null);
   const [currentTrack, setCurrentTrack] = useState(null);
@@ -30,7 +31,10 @@ export const PlayerProvider = ({ children }) => {
 
   const [recentlyPlayed, setRecentlyPlayed] = useState(() => {
     try {
-      const saved = localStorage.getItem('chillmusic_recently_played');
+      const savedUser = localStorage.getItem('user');
+      const parsedUser = savedUser ? JSON.parse(savedUser) : null;
+      const userKey = `recently_played_${user?.uid || user?.id || parsedUser?.uid || parsedUser?.id || 'guest'}`;
+      const saved = localStorage.getItem(userKey) || localStorage.getItem('chillmusic_recently_played');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
@@ -38,19 +42,30 @@ export const PlayerProvider = ({ children }) => {
   });
 
   const addToRecentlyPlayed = (track) => {
-    if (!track || (!track.title && !track.name)) return;
+    if (!track || (!track.id && !track.videoId && !track.title && !track.name)) return;
     const norm = normalizeTrack(track);
-    setRecentlyPlayed((prev) => {
-      const filtered = prev.filter(
-        (item) => String(item.id) !== String(norm.id) && item.title !== norm.title
+    setRecentlyPlayed((prevList) => {
+      const trackId = norm.id || norm.videoId;
+      const filtered = (prevList || []).filter(
+        (t) =>
+          (t.id || t.videoId) !== trackId &&
+          !(t.title === norm.title && (t.artist === norm.artist || t.artist_name === norm.artist_name))
       );
       const updated = [norm, ...filtered].slice(0, 20);
       try {
+        const userKey = `recently_played_${user?.uid || user?.id || user?.email || 'guest'}`;
+        localStorage.setItem(userKey, JSON.stringify(updated));
         localStorage.setItem('chillmusic_recently_played', JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });
   };
+
+  useEffect(() => {
+    if (currentTrack && isPlaying) {
+      addToRecentlyPlayed(currentTrack);
+    }
+  }, [currentTrack?.id, currentTrack?.videoId, isPlaying]);
 
   const [favorites, setFavorites] = useState(() => {
     try {
@@ -578,7 +593,6 @@ export const PlayerProvider = ({ children }) => {
     }
   };
 
-  const { user } = useAuth();
   const prevUserRef = useRef(user);
 
   useEffect(() => {
@@ -649,3 +663,5 @@ export const PlayerProvider = ({ children }) => {
 };
 
 export const usePlayer = () => useContext(PlayerContext);
+export const useMusicContext = () => useContext(PlayerContext);
+
