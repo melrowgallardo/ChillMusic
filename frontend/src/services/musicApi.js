@@ -24,3 +24,6 @@ export const getFullAudioStream = async (title, artist) => {
   }
   return null;
 };
+
+export { fetchYouTubeVideoId } from './youtube';
+

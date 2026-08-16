@@ -5,7 +5,7 @@ import { searchUnified, getRecommendations } from '../services/jamendo';
 import { useAuth } from './AuthContext';
 import { getLocalDownloadById } from '../services/offlineSync';
 import { resolveFullAudioTrack, isPreviewUrl } from '../services/audioResolver';
-import { getFullAudioStream } from '../services/musicApi';
+import { getFullAudioStream, fetchYouTubeVideoId } from '../services/musicApi';
 
 import { normalizeTrack } from '../utils/trackUtils';
 
@@ -292,80 +292,36 @@ export const PlayerProvider = ({ children }) => {
       });
     }
 
-    // Asynchronously resolve full-length MP3 stream via getFullAudioStream
-    const streamData = await getFullAudioStream(normalizedSong.title, normalizedSong.artist || normalizedSong.artist_name);
-    let playableUrl = streamData?.streamUrl || normalizedSong.audioUrl || normalizedSong.audio_url || '';
-    let realDuration = streamData?.duration || normalizedSong.duration || fullDur;
+    // Resolve YouTube Video ID for full song streaming
+    const titleToSearch = normalizedSong.title || normalizedSong.name || '';
+    const artistToSearch = normalizedSong.artist || normalizedSong.artist_name || '';
 
-    if (!playableUrl || isPreviewUrl(playableUrl, realDuration)) {
+    let videoId = normalizedSong.videoId || normalizedSong.youtubeId;
+    if (!videoId && (titleToSearch || artistToSearch)) {
+      videoId = await fetchYouTubeVideoId(titleToSearch, artistToSearch);
+    }
+
+    if (!videoId) {
       const resolvedTarget = await resolveFullAudioTrack({
         ...normalizedSong,
-        duration: realDuration,
+        duration: fullDur,
       });
-      if (resolvedTarget?.audioUrl) {
-        playableUrl = resolvedTarget.audioUrl;
-        realDuration = resolvedTarget.duration || realDuration;
+      if (resolvedTarget?.videoId || resolvedTarget?.youtubeId) {
+        videoId = resolvedTarget.videoId || resolvedTarget.youtubeId;
       }
     }
 
-    const updatedTrack = {
+    const updatedTrack = normalizeTrack({
       ...normalizedSong,
-      audioUrl: playableUrl,
-      audio_url: playableUrl,
-      duration: realDuration,
-    };
-    const targetTrack = normalizeTrack(updatedTrack);
-    if (targetTrack) {
-      setCurrentTrack(targetTrack);
-      if (targetTrack.duration && targetTrack.duration > 35) {
-        setDuration(targetTrack.duration);
-      }
-    }
+      videoId: videoId || normalizedSong.videoId,
+      youtubeId: videoId || normalizedSong.youtubeId,
+      audioUrl: '', // Never set currentTrack.audioUrl to 30s preview link
+      audio_url: '',
+      duration: fullDur,
+    });
 
-    // Clear previous audio buffer when a new song starts to prevent playing stale cached audio
-    const audio = audioRef.current;
-    audio.pause();
-    audio.currentTime = 0;
-    audio.removeAttribute('src');
-    audio.load();
-
-    const rawUrl = targetTrack?.audioUrl || targetTrack?.audio_url || '';
-    const defaultUrl = getFullAudioUrl(rawUrl);
-
-    const startPlay = (urlToPlay) => {
-      if (urlToPlay) {
-        audio.src = urlToPlay;
-        audio.currentTime = 0; // Always begin at 0:00 Intro
-        setCurrentTime(0);
-        audio.load(); // Dynamically update and reload exact audio URL matching currentTrack.id
-
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setIsPlaying(true);
-              recordHistory(targetTrack);
-            })
-            .catch((err) => {
-              console.error('Full Stream Playback Error:', err);
-              setIsPlaying(false);
-            });
-        }
-      }
-    };
-
-    getLocalDownloadById(targetTrack.id)
-      .then((downloaded) => {
-        if (downloaded && downloaded.audioBlob) {
-          const blobUrl = URL.createObjectURL(downloaded.audioBlob);
-          startPlay(blobUrl);
-        } else {
-          startPlay(defaultUrl);
-        }
-      })
-      .catch(() => {
-        startPlay(defaultUrl);
-      });
+    setCurrentTrack(updatedTrack);
+    recordHistory(updatedTrack);
   };
 
   const togglePlayPause = () => {
@@ -380,15 +336,9 @@ export const PlayerProvider = ({ children }) => {
           ytPlayerRef.current.playVideo();
           setIsPlaying(true);
         }
-        return;
       } catch (e) {}
-    }
-    const audio = audioRef.current;
-    if (isPlaying) {
-      audio.pause();
-      setIsPlaying(false);
     } else {
-      audio.play().then(() => setIsPlaying(true)).catch(console.error);
+      setIsPlaying(!isPlaying);
     }
   };
 
@@ -399,9 +349,6 @@ export const PlayerProvider = ({ children }) => {
           ytPlayerRef.current.seekTo(0, true);
           ytPlayerRef.current.playVideo();
         } catch (e) {}
-      } else {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play();
       }
     } else if (repeatMode === 'all' && currentIndex === queue.length - 1) {
       nextTrack(true);
@@ -459,9 +406,6 @@ export const PlayerProvider = ({ children }) => {
         ytPlayerRef.current.seekTo(seconds, true);
       } catch (e) {}
     }
-    if (audioRef.current) {
-      audioRef.current.currentTime = seconds;
-    }
   };
 
   const handleVolumeChange = (newVol) => {
@@ -471,19 +415,22 @@ export const PlayerProvider = ({ children }) => {
         ytPlayerRef.current.setVolume(newVol * 100);
       } catch (e) {}
     }
-    if (audioRef.current) {
-      audioRef.current.volume = newVol;
-    }
     if (newVol > 0 && isMuted) setIsMuted(false);
   };
 
   const toggleMute = () => {
-    if (isMuted) {
-      audioRef.current.volume = volume;
-      setIsMuted(false);
+    if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === 'function') {
+      try {
+        if (isMuted) {
+          ytPlayerRef.current.setVolume(volume * 100);
+          setIsMuted(false);
+        } else {
+          ytPlayerRef.current.setVolume(0);
+          setIsMuted(true);
+        }
+      } catch (e) {}
     } else {
-      audioRef.current.volume = 0;
-      setIsMuted(true);
+      setIsMuted(!isMuted);
     }
   };
 

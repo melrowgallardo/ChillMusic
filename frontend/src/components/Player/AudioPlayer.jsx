@@ -4,7 +4,6 @@ import { usePlayer } from '../../context/PlayerContext';
 
 const AudioPlayer = () => {
   const {
-    audioRef,
     ytPlayerRef,
     currentTrack,
     isPlaying,
@@ -22,7 +21,7 @@ const AudioPlayer = () => {
     currentTrack?.youtubeId ||
     (currentTrack?.id && String(currentTrack.id).startsWith('yt_') ? String(currentTrack.id).replace('yt_', '') : null);
 
-  const opts = {
+  const playerOptions = {
     height: '0',
     width: '0',
     playerVars: {
@@ -31,11 +30,12 @@ const AudioPlayer = () => {
       disablekb: 1,
       fs: 0,
       rel: 0,
+      origin: typeof window !== 'undefined' ? window.location.origin : '',
       start: 0, // Force start at 0:00 (Intro)
     },
   };
 
-  const onReady = (event) => {
+  const handlePlayerReady = (event) => {
     const player = event.target;
     setYtPlayer(player);
     ytPlayerRef.current = player;
@@ -48,7 +48,7 @@ const AudioPlayer = () => {
     } catch (e) {}
   };
 
-  const onStateChange = (event) => {
+  const handleStateChange = (event) => {
     // YouTube PlayerState: 1 = PLAYING, 2 = PAUSED, 0 = ENDED
     if (event.data === 1) setIsPlaying(true);
     if (event.data === 2) setIsPlaying(false);
@@ -86,85 +86,22 @@ const AudioPlayer = () => {
     };
   }, [isPlaying, ytPlayer, setCurrentTime, setDuration]);
 
-  // Fallback HTML5 Audio Player for non-YouTube tracks
-  const rawAudioUrl = currentTrack?.audioUrl || currentTrack?.audio_url;
-  useEffect(() => {
-    if (videoId) return; // Managed by react-youtube engine
-    if (audioRef?.current && rawAudioUrl) {
-      if (audioRef.current.src !== rawAudioUrl) {
-        audioRef.current.src = rawAudioUrl;
-        audioRef.current.currentTime = 0;
-        setCurrentTime(0);
-        audioRef.current.load();
-      }
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => setIsPlaying(true))
-          .catch((err) => {
-            console.warn('Fallback audio playback error:', err);
-            setIsPlaying(false);
-          });
-      }
-    }
-  }, [videoId, rawAudioUrl, currentTrack?.id]);
-
   return (
-    <>
-      {/* Hidden YouTube IFrame Audio Engine Wrapper */}
-      <div style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}>
-        {videoId && (
-          <YouTube
-            key={videoId}
-            videoId={videoId}
-            opts={opts}
-            onReady={onReady}
-            onStateChange={onStateChange}
-            onError={(err) => {
-              console.warn('react-youtube error:', err);
-              nextTrack();
-            }}
-          />
-        )}
-      </div>
-
-      {/* Fallback HTML5 Audio Element */}
-      <audio
-        ref={audioRef}
-        src={rawAudioUrl || ''}
-        preload="auto"
-        onLoadedMetadata={() => {
-          if (audioRef?.current?.duration) {
-            const dur = audioRef.current.duration;
-            if (dur > 35) {
-              setDuration(dur);
-            }
-          }
-        }}
-        onTimeUpdate={() => {
-          if (!videoId && audioRef?.current) {
-            setCurrentTime(audioRef.current.currentTime);
-          }
-        }}
-        onEnded={() => {
-          if (!videoId) {
-            const currentAudioTime = audioRef.current?.currentTime || 0;
-            const audioDuration = audioRef.current?.duration || 0;
-            const targetDuration = currentTrack?.duration || 0;
-            const expectedDuration = Math.max(audioDuration, targetDuration);
-
-            // Ensure onEnded only triggers when the full duration completes
-            if (expectedDuration <= 35 || currentAudioTime >= expectedDuration - 3 || audioDuration >= expectedDuration - 5) {
-              nextTrack();
-            } else {
-              console.warn(`Preventing premature 30s cutoff onEnded at ${currentAudioTime}s (expected ~${expectedDuration}s)`);
-            }
-          }
-        }}
-        onError={(e) => console.error('Audio Playback Error:', e.currentTarget.error)}
-        style={{ display: 'none' }}
-      />
-    </>
+    <div style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}>
+      {videoId && (
+        <YouTube
+          key={videoId}
+          videoId={videoId}
+          opts={playerOptions}
+          onReady={handlePlayerReady}
+          onStateChange={handleStateChange}
+          onError={(err) => {
+            console.warn('react-youtube error:', err);
+            nextTrack();
+          }}
+        />
+      )}
+    </div>
   );
 };
 

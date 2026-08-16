@@ -53,6 +53,40 @@ const fetchProxyJson = async (url, timeoutMs = 8000) => {
   return null;
 };
 
+export const fetchYouTubeVideoId = async (title, artist) => {
+  try {
+    const queryStr = `${title || ''} ${artist || ''} official audio`.trim();
+    if (!queryStr) return null;
+    const query = encodeURIComponent(queryStr);
+    const pipedEndpoints = [
+      `https://pipedapi.kavin.rocks/search?q=${query}&filter=music_songs`,
+      `https://pipedapi.tokhmi.xyz/search?q=${query}&filter=music_songs`,
+      `https://api.piped.privacydev.net/search?q=${query}&filter=music_songs`,
+    ];
+
+    for (const endpoint of pipedEndpoints) {
+      try {
+        const res = await fetchWithTimeout(endpoint, 4000);
+        if (res.ok) {
+          const data = await res.json();
+          const items = data?.items || (Array.isArray(data) ? data : []);
+          if (items && items.length > 0) {
+            const first = items[0];
+            const url = first.url || '';
+            const vid = url.includes('v=')
+              ? url.split('v=')[1].split('&')[0]
+              : url.replace('/watch?v=', '').split('&')[0] || first.id || first.videoId;
+            if (vid) return vid;
+          }
+        }
+      } catch (err) {}
+    }
+  } catch (e) {
+    console.warn('YouTube search fallback error:', e);
+  }
+  return null;
+};
+
 export const fetchYouTubePublic = async (query, limit = 20) => {
   const directMirrors = [
     `https://pipedapi.tokhmi.xyz/streams?q=${encodeURIComponent(query)}&filter=music_songs`,
