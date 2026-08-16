@@ -4,6 +4,7 @@ import { usePlayer } from '../../context/PlayerContext';
 
 const AudioPlayer = () => {
   const {
+    audioRef,
     ytPlayerRef,
     currentTrack,
     isPlaying,
@@ -20,6 +21,8 @@ const AudioPlayer = () => {
     currentTrack?.videoId ||
     currentTrack?.youtubeId ||
     (currentTrack?.id && String(currentTrack.id).startsWith('yt_') ? String(currentTrack.id).replace('yt_', '') : null);
+
+  const audioUrl = currentTrack?.audioUrl || currentTrack?.audio_url || '';
 
   const playerOptions = {
     height: '0',
@@ -55,6 +58,22 @@ const AudioPlayer = () => {
     if (event.data === 0) nextTrack();
   };
 
+  // Trigger .play() when currentTrack?.audioUrl changes
+  useEffect(() => {
+    if (audioRef.current && audioUrl && !videoId) {
+      audioRef.current.load();
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => setIsPlaying(true))
+          .catch((err) => {
+            console.warn('Autoplay prevented or playback error:', err);
+            setIsPlaying(false);
+          });
+      }
+    }
+  }, [audioUrl, videoId, currentTrack?.id]);
+
   // Sync volume with YouTube Player
   useEffect(() => {
     if (ytPlayer && typeof ytPlayer.setVolume === 'function') {
@@ -64,10 +83,17 @@ const AudioPlayer = () => {
     }
   }, [volume, ytPlayer]);
 
-  // Sync progress bar & scrubber (500ms Interval)
+  // Sync volume with HTML5 Audio Player
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
+
+  // Sync progress bar & scrubber (500ms Interval for YouTube engine)
   useEffect(() => {
     let timer = null;
-    if (isPlaying && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
+    if (isPlaying && videoId && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
       timer = setInterval(() => {
         try {
           const cur = ytPlayer.getCurrentTime();
@@ -84,24 +110,52 @@ const AudioPlayer = () => {
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [isPlaying, ytPlayer, setCurrentTime, setDuration]);
+  }, [isPlaying, videoId, ytPlayer, setCurrentTime, setDuration]);
 
   return (
-    <div style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}>
-      {videoId && (
-        <YouTube
-          key={videoId}
-          videoId={videoId}
-          opts={playerOptions}
-          onReady={handlePlayerReady}
-          onStateChange={handleStateChange}
-          onError={(err) => {
-            console.warn('react-youtube error:', err);
-            nextTrack();
-          }}
-        />
-      )}
-    </div>
+    <>
+      {/* Hidden YouTube IFrame Audio Engine */}
+      <div style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}>
+        {videoId && (
+          <YouTube
+            key={videoId}
+            videoId={videoId}
+            opts={playerOptions}
+            onReady={handlePlayerReady}
+            onStateChange={handleStateChange}
+            onError={(err) => {
+              console.warn('react-youtube error:', err);
+              nextTrack();
+            }}
+          />
+        )}
+      </div>
+
+      {/* HTML5 Audio Element for direct stream URLs */}
+      <audio
+        ref={audioRef}
+        src={audioUrl}
+        preload="auto"
+        onTimeUpdate={() => {
+          if (!videoId && audioRef.current) {
+            setCurrentTime(audioRef.current.currentTime);
+          }
+        }}
+        onLoadedMetadata={() => {
+          if (!videoId && audioRef.current?.duration) {
+            setDuration(audioRef.current.duration);
+          }
+        }}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={nextTrack}
+        onError={(e) => {
+          console.error('Audio playback error:', e);
+          setIsPlaying(false);
+        }}
+        style={{ display: 'none' }}
+      />
+    </>
   );
 };
 

@@ -26,6 +26,7 @@ export const PlayerProvider = ({ children }) => {
   const [repeatMode, setRepeatMode] = useState('off'); // 'off' | 'all' | 'one'
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [recentlyPlayed, setRecentlyPlayed] = useState(() => {
     try {
@@ -292,35 +293,73 @@ export const PlayerProvider = ({ children }) => {
       });
     }
 
-    // Resolve YouTube Video ID for full song streaming
+    // 1. Try to fetch direct stream from public Saavn API
+    let streamUrl = normalizedSong.audioUrl || normalizedSong.audio_url || '';
+    let streamDuration = fullDur;
+
     const titleToSearch = normalizedSong.title || normalizedSong.name || '';
     const artistToSearch = normalizedSong.artist || normalizedSong.artist_name || '';
 
-    let videoId = normalizedSong.videoId || normalizedSong.youtubeId;
-    if (!videoId && (titleToSearch || artistToSearch)) {
-      videoId = await fetchYouTubeVideoId(titleToSearch, artistToSearch);
+    try {
+      const query = encodeURIComponent(`${titleToSearch} ${artistToSearch}`.trim());
+      const res = await fetch(`https://saavn.dev/api/search/songs?query=${query}&page=1&limit=1`);
+      const data = await res.json();
+      const songData = data?.data?.results?.[0];
+      if (songData?.downloadUrl) {
+        const downloadLinks = songData.downloadUrl;
+        streamUrl = downloadLinks[downloadLinks.length - 1]?.url || downloadLinks[0]?.url;
+        if (songData.duration) {
+          streamDuration = Number(songData.duration);
+        }
+      }
+    } catch (e) {
+      console.warn('Full stream search failed, using default preview:', e);
     }
 
-    if (!videoId) {
-      const resolvedTarget = await resolveFullAudioTrack({
-        ...normalizedSong,
-        duration: fullDur,
-      });
-      if (resolvedTarget?.videoId || resolvedTarget?.youtubeId) {
-        videoId = resolvedTarget.videoId || resolvedTarget.youtubeId;
+    // Fallback to track.previewUrl if resolver fails
+    if (!streamUrl && normalizedSong.previewUrl) {
+      streamUrl = normalizedSong.previewUrl;
+    }
+
+    // Fallback to YouTube Video ID if no direct stream URL found
+    let videoId = normalizedSong.videoId || normalizedSong.youtubeId;
+    if (!streamUrl && !videoId) {
+      if (titleToSearch || artistToSearch) {
+        videoId = await fetchYouTubeVideoId(titleToSearch, artistToSearch);
+      }
+      if (!videoId) {
+        const resolvedTarget = await resolveFullAudioTrack({
+          ...normalizedSong,
+          duration: fullDur,
+        });
+        if (resolvedTarget?.audioUrl) streamUrl = resolvedTarget.audioUrl;
+        if (resolvedTarget?.videoId || resolvedTarget?.youtubeId) {
+          videoId = resolvedTarget.videoId || resolvedTarget.youtubeId;
+        }
       }
     }
 
+    if (!streamUrl && !videoId) {
+      console.error('No playable audio source found for track:', normalizedSong);
+      setIsLoading(false);
+      setIsPlaying(false);
+      return;
+    }
+
+    const realDur = streamDuration && streamDuration > 35 ? streamDuration : fullDur;
+    setDuration(realDur);
+
     const updatedTrack = normalizeTrack({
       ...normalizedSong,
+      audioUrl: streamUrl || '',
+      audio_url: streamUrl || '',
       videoId: videoId || normalizedSong.videoId,
       youtubeId: videoId || normalizedSong.youtubeId,
-      audioUrl: '', // Never set currentTrack.audioUrl to 30s preview link
-      audio_url: '',
-      duration: fullDur,
+      duration: realDur,
     });
 
     setCurrentTrack(updatedTrack);
+    setIsLoading(false);
     recordHistory(updatedTrack);
   };
 
@@ -336,9 +375,20 @@ export const PlayerProvider = ({ children }) => {
           ytPlayerRef.current.playVideo();
           setIsPlaying(true);
         }
+        return;
       } catch (e) {}
-    } else {
-      setIsPlaying(!isPlaying);
+    }
+    const audio = audioRef.current;
+    if (audio && audio.src) {
+      if (isPlaying) {
+        audio.pause();
+        setIsPlaying(false);
+      } else {
+        audio.play().then(() => setIsPlaying(true)).catch((err) => {
+          console.warn('Playback error:', err);
+          setIsPlaying(false);
+        });
+      }
     }
   };
 
@@ -349,6 +399,9 @@ export const PlayerProvider = ({ children }) => {
           ytPlayerRef.current.seekTo(0, true);
           ytPlayerRef.current.playVideo();
         } catch (e) {}
+      } else if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play();
       }
     } else if (repeatMode === 'all' && currentIndex === queue.length - 1) {
       nextTrack(true);
@@ -406,6 +459,9 @@ export const PlayerProvider = ({ children }) => {
         ytPlayerRef.current.seekTo(seconds, true);
       } catch (e) {}
     }
+    if (audioRef.current) {
+      audioRef.current.currentTime = seconds;
+    }
   };
 
   const handleVolumeChange = (newVol) => {
@@ -415,22 +471,29 @@ export const PlayerProvider = ({ children }) => {
         ytPlayerRef.current.setVolume(newVol * 100);
       } catch (e) {}
     }
+    if (audioRef.current) {
+      audioRef.current.volume = newVol;
+    }
     if (newVol > 0 && isMuted) setIsMuted(false);
   };
 
   const toggleMute = () => {
-    if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === 'function') {
-      try {
-        if (isMuted) {
+    if (isMuted) {
+      if (audioRef.current) audioRef.current.volume = volume;
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === 'function') {
+        try {
           ytPlayerRef.current.setVolume(volume * 100);
-          setIsMuted(false);
-        } else {
-          ytPlayerRef.current.setVolume(0);
-          setIsMuted(true);
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
+      setIsMuted(false);
     } else {
-      setIsMuted(!isMuted);
+      if (audioRef.current) audioRef.current.volume = 0;
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.setVolume === 'function') {
+        try {
+          ytPlayerRef.current.setVolume(0);
+        } catch (e) {}
+      }
+      setIsMuted(true);
     }
   };
 
@@ -556,6 +619,8 @@ export const PlayerProvider = ({ children }) => {
         isQueueOpen,
         isFullPlayerOpen,
         isSmartShuffling,
+        isLoading,
+        setIsLoading,
         setIsQueueOpen,
         setIsFullPlayerOpen,
         playTrack,
