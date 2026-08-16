@@ -31,15 +31,21 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
   const { isOnline } = useOffline();
   const [anchorEl, setAnchorEl] = useState(null);
 
-  const isFavRow = isFavContext(track?.id, track?.title);
+  const isFavRow = isFavContext(track?.id || track?.videoId, track?.title);
 
-  const isCurrent =
-    currentTrack &&
+  const isCurrentTrack =
+    Boolean(currentTrack) &&
+    Boolean(track) &&
     (String(currentTrack.id) === String(track.id) ||
-      (currentTrack.title === track.title && (currentTrack.artist_name === track.artist_name || currentTrack.artist === track.artist)));
+      (currentTrack.videoId && track.videoId && String(currentTrack.videoId) === String(track.videoId)) ||
+      (currentTrack.id && track.videoId && String(currentTrack.id) === String(track.videoId)) ||
+      (currentTrack.videoId && track.id && String(currentTrack.videoId) === String(track.id)) ||
+      (currentTrack.title === track.title && (currentTrack.artist === track.artist || currentTrack.artist_name === track.artist_name)));
+
+  const isThisPlaying = isCurrentTrack && isPlaying;
 
   const handleRowClick = () => {
-    if (isCurrent) {
+    if (isThisPlaying || isCurrentTrack) {
       togglePlayPause();
     } else {
       playTrack(track, queue.length ? queue : [track], index);
@@ -121,7 +127,8 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
         borderRadius: 'var(--radius-sm)',
         transition: 'background 0.2s',
         cursor: 'pointer',
-        backgroundColor: isCurrent ? 'rgba(124, 58, 237, 0.12)' : 'transparent',
+        backgroundColor: isCurrentTrack ? 'rgba(124, 58, 237, 0.12)' : 'transparent',
+        borderLeft: isCurrentTrack ? '3px solid var(--accent-primary)' : '3px solid transparent',
         '&:hover': {
           backgroundColor: 'var(--bg-glass-card-hover)',
           '& .track-idx': { display: 'none' },
@@ -132,11 +139,11 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
       {/* Left: Index / Cover / Title */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, overflow: 'hidden' }}>
         <Box sx={{ minWidth: 28, textAlign: 'center', color: 'var(--text-muted)' }}>
-          {isCurrent ? (
-            isPlaying ? (
-              <AudioVisualizer isPlaying={isPlaying} />
+          {isCurrentTrack ? (
+            isThisPlaying ? (
+              <AudioVisualizer isPlaying={true} />
             ) : (
-              <PlayArrowIcon fontSize="small" sx={{ color: 'var(--accent-primary)' }} />
+              <PauseIcon fontSize="small" sx={{ color: 'var(--accent-primary)' }} />
             )
           ) : (
             <>
@@ -170,8 +177,8 @@ const TrackRow = ({ track, index, queue = [], onAddToPlaylist, onRemoveTrack }) 
           <Typography
             variant="body1"
             sx={{
-              fontWeight: isCurrent ? 700 : 500,
-              color: isCurrent ? 'var(--accent-primary)' : 'var(--text-primary)',
+              fontWeight: isCurrentTrack ? 700 : 500,
+              color: isCurrentTrack ? 'var(--accent-primary)' : 'var(--text-primary)',
               fontSize: '0.95rem',
             }}
             noWrap

@@ -1,28 +1,45 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Box, Typography, IconButton, Tooltip } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import PauseIcon from '@mui/icons-material/Pause';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import DownloadIcon from '@mui/icons-material/Download';
 import { usePlayer } from '../../context/PlayerContext';
 import { useAuth } from '../../context/AuthContext';
 import { useOffline } from '../../context/OfflineContext';
-import { enqueueOfflineAction, saveDownloadLocally } from '../../services/offlineSync';
-import { toggleFavorite as toggleFavFirestore, isFavorite } from '../../services/firestoreService';
+import { saveDownloadLocally } from '../../services/offlineSync';
+import { toggleFavorite as toggleFavFirestore } from '../../services/firestoreService';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
 const TrackCard = ({ track, queue = [] }) => {
-  const { playTrack, currentTrack, isPlaying, toggleFavorite: toggleFavContext, isFavorite: isFavContext } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlayPause, toggleFavorite: toggleFavContext, isFavorite: isFavContext } = usePlayer();
   const { user } = useAuth();
   const { isOnline } = useOffline();
 
-  const isFavCard = isFavContext(track?.id, track?.title);
-  const isCurrent = currentTrack && (String(currentTrack.id) === String(track.id) || currentTrack.title === track.title);
+  const isFavCard = isFavContext(track?.id || track?.videoId, track?.title);
+
+  const isCurrentTrack =
+    Boolean(currentTrack) &&
+    Boolean(track) &&
+    (String(currentTrack.id) === String(track.id) ||
+      (currentTrack.videoId && track.videoId && String(currentTrack.videoId) === String(track.videoId)) ||
+      (currentTrack.id && track.videoId && String(currentTrack.id) === String(track.videoId)) ||
+      (currentTrack.videoId && track.id && String(currentTrack.videoId) === String(track.id)) ||
+      (currentTrack.title === track.title && (currentTrack.artist === track.artist || currentTrack.artist_name === track.artist_name)));
+
+  const isThisPlaying = isCurrentTrack && isPlaying;
 
   const handlePlay = (e) => {
     e.stopPropagation();
-    playTrack(track, queue.length ? queue : [track]);
+    if (isThisPlaying) {
+      togglePlayPause();
+    } else if (isCurrentTrack) {
+      togglePlayPause();
+    } else {
+      playTrack(track, queue.length ? queue : [track]);
+    }
   };
 
   const handleToggleFav = async (e) => {
@@ -46,7 +63,7 @@ const TrackCard = ({ track, queue = [] }) => {
         return (name || '').replace(/[\\/:*?"<>|]/g, '').trim();
       };
 
-      const filename = `${sanitizeFileName(track.title)} - ${sanitizeFileName(track.artist_name)}.mp3`;
+      const filename = `${sanitizeFileName(track.title)} - ${sanitizeFileName(track.artist_name || track.artist)}.mp3`;
 
       if (Capacitor.isNativePlatform()) {
         try {
@@ -82,6 +99,10 @@ const TrackCard = ({ track, queue = [] }) => {
         display: 'flex',
         flexDirection: 'column',
         gap: 1.5,
+        border: isCurrentTrack ? '1px solid var(--accent-primary)' : '1px solid transparent',
+        boxShadow: isCurrentTrack ? '0 0 15px rgba(124, 58, 237, 0.4)' : 'none',
+        transition: 'all 0.3s ease',
+        cursor: 'pointer',
         '&:hover .play-btn': {
           opacity: 1,
           transform: 'translateY(0)',
@@ -129,19 +150,19 @@ const TrackCard = ({ track, queue = [] }) => {
             position: 'absolute',
             bottom: 10,
             right: 10,
-            backgroundColor: 'var(--accent-primary)',
+            backgroundColor: isThisPlaying ? 'var(--accent-pink)' : 'var(--accent-primary)',
             color: '#ffffff',
-            opacity: isCurrent ? 1 : 0,
-            transform: isCurrent ? 'translateY(0)' : 'translateY(10px)',
+            opacity: isCurrentTrack ? 1 : 0,
+            transform: isCurrentTrack ? 'translateY(0)' : 'translateY(10px)',
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.4)',
+            boxShadow: isThisPlaying ? '0 0 15px rgba(236, 72, 153, 0.6)' : '0 4px 15px rgba(0, 0, 0, 0.4)',
             '&:hover': {
-              backgroundColor: '#6d28d9',
+              backgroundColor: isThisPlaying ? '#db2777' : 'var(--accent-primary-hover, #7c3aed)',
               transform: 'scale(1.1)',
             },
           }}
         >
-          <PlayArrowIcon />
+          {isThisPlaying ? <PauseIcon /> : <PlayArrowIcon />}
         </IconButton>
       </Box>
 
@@ -151,7 +172,7 @@ const TrackCard = ({ track, queue = [] }) => {
             variant="body1"
             sx={{
               fontWeight: 700,
-              color: isCurrent ? 'var(--accent-primary)' : 'var(--text-primary)',
+              color: isCurrentTrack ? 'var(--accent-primary)' : 'var(--text-primary)',
               fontSize: '0.95rem',
             }}
             noWrap
@@ -159,7 +180,7 @@ const TrackCard = ({ track, queue = [] }) => {
             {track.title}
           </Typography>
           <Typography variant="caption" sx={{ color: 'var(--text-muted)' }} noWrap>
-            {track.artist_name}
+            {track.artist_name || track.artist}
           </Typography>
         </Box>
 
@@ -181,3 +202,4 @@ const TrackCard = ({ track, queue = [] }) => {
 };
 
 export default TrackCard;
+
