@@ -86,6 +86,7 @@ const Search = () => {
     if (!query.trim()) return;
     const timer = setTimeout(() => {
       setSearchParams({ q: query.trim() }, { replace: true });
+      performSearch(query.trim());
     }, 500);
     return () => clearTimeout(timer);
   }, [query]);
@@ -171,6 +172,9 @@ const Search = () => {
             <Button
               type="submit"
               variant="contained"
+              onClick={() => {
+                if (query.trim()) performSearch(query.trim());
+              }}
               sx={{ backgroundColor: 'var(--accent-primary)', fontWeight: 700, px: 3 }}
             >
               Search

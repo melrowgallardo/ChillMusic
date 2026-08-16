@@ -327,47 +327,60 @@ export const getPersonalizedQueriesForUser = (user, recentlyPlayed = [], favorit
 
 export const searchYouTubeTracks = async (query) => {
   try {
-    if (!query || !query.trim()) return [];
-    const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY || 'AIzaSyAVW_86xvVRgRWu25NFhyiPGBSpuHx_BvA';
-    const term = `${query.trim()} official song audio`;
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoDuration=medium&maxResults=25&q=${encodeURIComponent(term)}&key=${apiKey}`;
+    const term = query?.trim();
+    if (!term) return [];
 
-    const res = await fetch(url);
+    const apiKey =
+      import.meta.env.VITE_YOUTUBE_API_KEY ||
+      import.meta.env.YOUTUBE_API_KEY ||
+      'AIzaSyAVW_86xvVRgRWu25NFhyiPGBSpuHx_BvA';
+
+    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=25&q=${encodeURIComponent(
+      term + ' song'
+    )}&key=${apiKey}`;
+
+    const res = await fetch(searchUrl);
     const data = await res.json();
 
-    if (!data?.items) {
-      console.warn('YouTube API returned no items or error:', data);
+    if (!data?.items || data.items.length === 0) {
+      console.warn('YouTube API returned 0 items:', data);
       return [];
     }
 
-    return data.items.map((item) => {
-      const cleanTitle = (item.snippet?.title || '')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&')
-        .replace(/\(Official Audio\)/gi, '')
-        .replace(/\(Official Music Video\)/gi, '')
-        .replace(/\[Official Audio\]/gi, '')
-        .replace(/\[Official Video\]/gi, '');
-      const cover = item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || '';
-      const videoId = item.id?.videoId;
+    return data.items
+      .filter((item) => item.id?.videoId)
+      .map((item) => {
+        const title = (item.snippet?.title || '')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&amp;/g, '&')
+          .replace(/\(Official Audio\)/gi, '')
+          .replace(/\(Official Music Video\)/gi, '')
+          .replace(/\[Official Audio\]/gi, '')
+          .replace(/\[Official Video\]/gi, '');
+        const cover =
+          item.snippet?.thumbnails?.high?.url ||
+          item.snippet?.thumbnails?.medium?.url ||
+          item.snippet?.thumbnails?.default?.url ||
+          '';
+        const videoId = item.id.videoId;
 
-      return {
-        id: videoId,
-        videoId: videoId,
-        title: cleanTitle.trim() || 'Untitled Track',
-        artist: item.snippet?.channelTitle || 'YouTube Artist',
-        artist_name: item.snippet?.channelTitle || 'YouTube Artist',
-        album: 'Official Single',
-        cover: cover,
-        cover_url: cover,
-        image: cover,
-        image_url: cover,
-        duration: 210,
-      };
-    });
+        return {
+          id: videoId,
+          videoId: videoId,
+          title: title.trim() || 'Untitled Track',
+          artist: item.snippet?.channelTitle || 'Artist',
+          artist_name: item.snippet?.channelTitle || 'Artist',
+          album: 'Single',
+          cover: cover,
+          cover_url: cover,
+          image: cover,
+          image_url: cover,
+          duration: 210,
+        };
+      });
   } catch (err) {
-    console.error('Failed to search YouTube API:', err);
+    console.error('YouTube track search failed:', err);
     return [];
   }
 };
