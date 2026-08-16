@@ -4,7 +4,8 @@ import { getAutoQueueRecommendations } from '../services/gemini_service';
 import { searchUnified, getRecommendations } from '../services/jamendo';
 import { useAuth } from './AuthContext';
 import { getLocalDownloadById } from '../services/offlineSync';
-import { resolveFullAudioTrack } from '../services/audioResolver';
+import { resolveFullAudioTrack, isPreviewUrl } from '../services/audioResolver';
+import { getFullAudioStream } from '../services/musicApi';
 
 import { normalizeTrack } from '../utils/trackUtils';
 
@@ -291,13 +292,29 @@ export const PlayerProvider = ({ children }) => {
       });
     }
 
-    // Resolve full-length audio stream via YouTube / Piped / Invidious stream resolver
-    // Query format: `${track.artist} - ${track.title} official audio`
-    const resolvedTarget = await resolveFullAudioTrack({
+    // Asynchronously resolve full-length MP3 stream via getFullAudioStream
+    const streamData = await getFullAudioStream(normalizedSong.title, normalizedSong.artist || normalizedSong.artist_name);
+    let playableUrl = streamData?.streamUrl || normalizedSong.audioUrl || normalizedSong.audio_url || '';
+    let realDuration = streamData?.duration || normalizedSong.duration || fullDur;
+
+    if (!playableUrl || isPreviewUrl(playableUrl, realDuration)) {
+      const resolvedTarget = await resolveFullAudioTrack({
+        ...normalizedSong,
+        duration: realDuration,
+      });
+      if (resolvedTarget?.audioUrl) {
+        playableUrl = resolvedTarget.audioUrl;
+        realDuration = resolvedTarget.duration || realDuration;
+      }
+    }
+
+    const updatedTrack = {
       ...normalizedSong,
-      duration: fullDur,
-    });
-    const targetTrack = normalizeTrack(resolvedTarget || normalizedSong);
+      audioUrl: playableUrl,
+      audio_url: playableUrl,
+      duration: realDuration,
+    };
+    const targetTrack = normalizeTrack(updatedTrack);
     if (targetTrack) {
       setCurrentTrack(targetTrack);
       if (targetTrack.duration && targetTrack.duration > 35) {

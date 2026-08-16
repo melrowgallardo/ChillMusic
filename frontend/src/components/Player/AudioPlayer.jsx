@@ -147,7 +147,19 @@ const AudioPlayer = () => {
           }
         }}
         onEnded={() => {
-          if (!videoId) nextTrack();
+          if (!videoId) {
+            const currentAudioTime = audioRef.current?.currentTime || 0;
+            const audioDuration = audioRef.current?.duration || 0;
+            const targetDuration = currentTrack?.duration || 0;
+            const expectedDuration = Math.max(audioDuration, targetDuration);
+
+            // Ensure onEnded only triggers when the full duration completes
+            if (expectedDuration <= 35 || currentAudioTime >= expectedDuration - 3 || audioDuration >= expectedDuration - 5) {
+              nextTrack();
+            } else {
+              console.warn(`Preventing premature 30s cutoff onEnded at ${currentAudioTime}s (expected ~${expectedDuration}s)`);
+            }
+          }
         }}
         onError={(e) => console.error('Audio Playback Error:', e.currentTarget.error)}
         style={{ display: 'none' }}
