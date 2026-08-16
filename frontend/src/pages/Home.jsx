@@ -60,9 +60,10 @@ const Home = () => {
 
       // 2. Fetch YouTube Categories & Playlists dynamically via YouTube Data API
       try {
-        const [hitsRes, newRelRes, chillRes, playlistsRes, artistsRes] = await Promise.all([
-          searchYouTubeMusic('Top Global Hits 2026').catch(() => []),
-          searchYouTubeMusic('New Pop Releases 2026').catch(() => []),
+        const [hitsRes, trendingRes, newRelRes, chillRes, playlistsRes, artistsRes] = await Promise.all([
+          searchYouTubeMusic('Sabrina Carpenter Espresso').catch(() => []),
+          searchYouTubeMusic('Bruno Mars Die With A Smile').catch(() => []),
+          searchYouTubeMusic('Taylor Swift Fortnight').catch(() => []),
           searchYouTubeMusic('Lofi Chill Beats Relax').catch(() => []),
           searchYouTubePlaylists('Top Hits Playlist').catch(() => []),
           searchArtists('lofi', 6).catch(() => []),
@@ -71,7 +72,11 @@ const Home = () => {
         if (isMounted) {
           if (hitsRes && hitsRes.length > 0) {
             setHitsTracks(hitsRes);
-            setTrendingTracks(hitsRes.length > 6 ? hitsRes.slice(6) : hitsRes);
+          }
+          if (trendingRes && trendingRes.length > 0) {
+            setTrendingTracks(trendingRes);
+          } else if (hitsRes && hitsRes.length > 6) {
+            setTrendingTracks(hitsRes.slice(6));
           }
           if (newRelRes && newRelRes.length > 0) {
             setNewReleaseTracks(newRelRes);

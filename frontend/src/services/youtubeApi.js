@@ -3,20 +3,37 @@
  */
 export const searchYouTubeMusic = async (query) => {
   try {
-    const term = query?.trim() ? query : 'Top Hits 2026';
+    const term = query?.trim() ? `${query.trim()} official audio` : 'Top Hits official music song';
     const apiKey =
       import.meta.env.VITE_YOUTUBE_API_KEY ||
       import.meta.env.YOUTUBE_API_KEY ||
       'AIzaSyAVW_86xvVRgRWu25NFhyiPGBSpuHx_BvA';
 
-    const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=25&q=${encodeURIComponent(term)}&key=${apiKey}`
-    );
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoDuration=medium&maxResults=25&q=${encodeURIComponent(term)}&key=${apiKey}`;
+    const res = await fetch(url);
     const data = await res.json();
+
     if (!data?.items) return [];
 
+    const forbiddenWords = [
+      'compilation',
+      'non stop',
+      'nonstop',
+      'full album',
+      'hours',
+      'mashup',
+      'greatest hits mix',
+      'collection',
+      '100 songs',
+      'top 100',
+    ];
+
     return data.items
-      .filter((item) => item.id && item.id.videoId)
+      .filter((item) => {
+        if (!item.id || !item.id.videoId) return false;
+        const titleLower = (item.snippet?.title || '').toLowerCase();
+        return !forbiddenWords.some((word) => titleLower.includes(word));
+      })
       .map((item) => {
         const title = (item.snippet?.title || '')
           .replace(/&quot;/g, '"')
@@ -24,8 +41,14 @@ export const searchYouTubeMusic = async (query) => {
           .replace(/&amp;/g, '&')
           .replace(/&lt;/g, '<')
           .replace(/&gt;/g, '>')
-          .replace(/&#34;/g, '"');
-        const channelTitle = item.snippet?.channelTitle || 'YouTube Artist';
+          .replace(/&#34;/g, '"')
+          .replace(/\(Official Audio\)/gi, '')
+          .replace(/\(Official Music Video\)/gi, '')
+          .replace(/\[Official Audio\]/gi, '')
+          .replace(/\[Official Video\]/gi, '')
+          .trim();
+
+        const channelTitle = item.snippet?.channelTitle || 'Artist';
         const videoId = item.id.videoId;
         const cover =
           item.snippet?.thumbnails?.high?.url ||
@@ -41,8 +64,8 @@ export const searchYouTubeMusic = async (query) => {
           title: title,
           artist: channelTitle,
           artist_name: channelTitle,
-          album: 'Official Track',
-          album_name: 'Official Track',
+          album: 'Single',
+          album_name: 'Single',
           cover: cover,
           cover_url: cover,
           image_url: cover,
