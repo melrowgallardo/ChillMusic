@@ -1,73 +1,62 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Typography, TextField, Tabs, Tab, Chip, Grid, Button } from '@mui/material';
+import { Box, Typography, TextField, Tabs, Tab, Grid, Button } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { useSearchParams } from 'react-router-dom';
-import { searchFullTracks } from '../services/musicApi';
-import { searchYouTubeMusic, searchYouTubePlaylists } from '../services/youtubeApi';
+import { searchYouTubeTracks, searchYouTubePlaylists } from '../services/youtubeApi';
 import TrackList from '../components/Track/TrackList';
 import ArtistCard from '../components/Artist/ArtistCard';
 import AlbumCard from '../components/Album/AlbumCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
-import { FALLBACK_TRACKS, FALLBACK_PLAYLISTS, FALLBACK_ALBUMS } from '../services/mockData';
 
-import { normalizeTrack } from '../utils/trackUtils';
-
-const GENRE_TAGS = ['Chill', 'Lofi', 'Ambient', 'Electronic', 'Jazz', 'Rock', 'Pop', 'Acoustic', 'Piano', 'Hip Hop'];
-
-const extractArtistsAndAlbums = (songsList = []) => {
+const extractArtists = (songsList = []) => {
   const artistMap = new Map();
-  const albumMap = new Map();
-
   songsList.forEach((item) => {
     if (!item) return;
-
-    // Extract Artist
-    const artistName = (item.artist || item.artist_name || item.primaryArtists || '').trim();
+    const artistName = (item.artist || item.artist_name || '').trim();
     if (artistName && artistName !== 'Various Artists' && artistName !== 'Unknown Artist') {
       const artKey = artistName.toLowerCase();
-      const cover = item.cover || item.cover_url || item.image_url || item.image || item.artwork;
+      const cover = item.cover || item.cover_url || item.image_url || item.image;
       if (!artistMap.has(artKey)) {
         artistMap.set(artKey, {
           id: `art_${artKey.replace(/[^a-z0-9]/g, '_')}`,
           name: artistName,
+          artist_name: artistName,
           imageUrl: cover || '',
           image_url: cover || '',
           cover_url: cover || '',
           image: cover || '',
-          genres: item.genre || 'Artist',
-          followers: null,
           type: 'Artist',
         });
       }
     }
+  });
+  return Array.from(artistMap.values());
+};
 
-    // Extract Album
-    const albumName = (item.album || item.album_name || '').trim();
-    if (albumName && albumName !== 'Single') {
-      const albKey = albumName.toLowerCase();
-      const cover = item.cover || item.cover_url || item.image_url || item.image || item.artwork;
-      if (!albumMap.has(albKey)) {
-        albumMap.set(albKey, {
-          id: `alb_${albKey.replace(/[^a-z0-9]/g, '_')}`,
-          name: albumName,
-          title: albumName,
-          artist_name: artistName || 'Various Artists',
-          artist: artistName || 'Various Artists',
-          cover_url: cover || '',
-          image_url: cover || '',
-          cover: cover || '',
-          image: cover || '',
-          release_date: '2024',
-        });
-      }
+const extractAlbums = (songsList = []) => {
+  const albumMap = new Map();
+  songsList.forEach((item) => {
+    if (!item) return;
+    const albumName = (item.album || item.album_name || 'Official Single').trim();
+    const artistName = (item.artist || item.artist_name || 'YouTube Artist').trim();
+    const albKey = `${albumName}_${artistName}`.toLowerCase();
+    const cover = item.cover || item.cover_url || item.image_url || item.image;
+    if (!albumMap.has(albKey)) {
+      albumMap.set(albKey, {
+        id: `alb_${albKey.replace(/[^a-z0-9]/g, '_')}`,
+        name: albumName,
+        title: albumName,
+        artist_name: artistName,
+        artist: artistName,
+        cover_url: cover || '',
+        image_url: cover || '',
+        cover: cover || '',
+        image: cover || '',
+      });
     }
   });
-
-  return {
-    artists: Array.from(artistMap.values()),
-    albums: Array.from(albumMap.values()),
-  };
+  return Array.from(albumMap.values());
 };
 
 const Search = () => {
@@ -87,7 +76,7 @@ const Search = () => {
     if (q) {
       setQuery(q);
       performSearch(q);
-    } else {
+    } else if (query.trim()) {
       performSearch(query);
     }
   }, [searchParams]);
@@ -102,39 +91,39 @@ const Search = () => {
   }, [query]);
 
   const performSearch = async (searchTerm) => {
-    const term = (!searchTerm || !searchTerm.trim()) ? 'Top Hits 2026' : searchTerm.trim();
+    const term = searchTerm?.trim();
+    if (!term) {
+      setSongs([]);
+      setArtists([]);
+      setAlbums([]);
+      setPlaylists([]);
+      setLoading(false);
+      return;
+    }
+
     const currentReq = ++searchReqId.current;
     setLoading(true);
+
     try {
       const [tracksRes, playlistsRes] = await Promise.all([
-        searchYouTubeMusic(term).catch(() => []),
+        searchYouTubeTracks(term).catch(() => []),
         searchYouTubePlaylists(term).catch(() => []),
       ]);
 
-      let tracks = tracksRes;
-      if (!tracks || tracks.length === 0) {
-        tracks = await searchFullTracks(term).catch(() => []);
-      }
-
       if (currentReq === searchReqId.current) {
-        const dynamicSongs = (tracks && tracks.length > 0 ? tracks : FALLBACK_TRACKS).map(normalizeTrack);
-        const { artists: dynamicArtists, albums: dynamicAlbums } = extractArtistsAndAlbums(dynamicSongs);
-        const dynamicPlaylists = playlistsRes && playlistsRes.length > 0 ? playlistsRes : FALLBACK_PLAYLISTS;
-
-        setSongs(dynamicSongs);
-        setArtists(dynamicArtists.length > 0 ? dynamicArtists : extractArtistsAndAlbums(FALLBACK_TRACKS).artists);
-        setAlbums(dynamicAlbums.length > 0 ? dynamicAlbums : FALLBACK_ALBUMS);
-        setPlaylists(dynamicPlaylists);
+        const results = tracksRes || [];
+        setSongs(results);
+        setArtists(extractArtists(results));
+        setAlbums(extractAlbums(results));
+        setPlaylists(playlistsRes || []);
       }
     } catch (err) {
-      console.error('Search failed:', err);
+      console.error('Search execution error:', err);
       if (currentReq === searchReqId.current) {
-        const fallbackSongs = FALLBACK_TRACKS.map(normalizeTrack);
-        const { artists: fallbackArtists, albums: fallbackAlbums } = extractArtistsAndAlbums(fallbackSongs);
-        setSongs(fallbackSongs);
-        setArtists(fallbackArtists);
-        setAlbums(fallbackAlbums.length > 0 ? fallbackAlbums : FALLBACK_ALBUMS);
-        setPlaylists(FALLBACK_PLAYLISTS);
+        setSongs([]);
+        setArtists([]);
+        setAlbums([]);
+        setPlaylists([]);
       }
     } finally {
       if (currentReq === searchReqId.current) {
@@ -147,12 +136,8 @@ const Search = () => {
     e.preventDefault();
     if (query.trim()) {
       setSearchParams({ q: query.trim() });
+      performSearch(query.trim());
     }
-  };
-
-  const handleChipClick = (tag) => {
-    setQuery(tag);
-    setSearchParams({ q: tag });
   };
 
   return (
@@ -192,10 +177,6 @@ const Search = () => {
             </Button>
           </Box>
         </form>
-
-
-
-
       </Box>
 
       {/* Result Tabs */}
@@ -218,7 +199,7 @@ const Search = () => {
       </Tabs>
 
       {loading ? (
-        <LoadingSpinner message="Searching music catalog..." />
+        <LoadingSpinner message="Searching YouTube music catalog..." />
       ) : (
         <Box sx={{ mt: 1 }}>
           {activeTab === 0 && <TrackList tracks={songs} />}
@@ -259,3 +240,4 @@ const Search = () => {
 };
 
 export default Search;
+

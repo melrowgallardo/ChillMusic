@@ -325,6 +325,54 @@ export const getPersonalizedQueriesForUser = (user, recentlyPlayed = [], favorit
   return baseSet.slice(0, 8);
 };
 
+export const searchYouTubeTracks = async (query) => {
+  try {
+    if (!query || !query.trim()) return [];
+    const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY || 'AIzaSyAVW_86xvVRgRWu25NFhyiPGBSpuHx_BvA';
+    const term = `${query.trim()} official song audio`;
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&videoDuration=medium&maxResults=25&q=${encodeURIComponent(term)}&key=${apiKey}`;
+
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data?.items) {
+      console.warn('YouTube API returned no items or error:', data);
+      return [];
+    }
+
+    return data.items.map((item) => {
+      const cleanTitle = (item.snippet?.title || '')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/\(Official Audio\)/gi, '')
+        .replace(/\(Official Music Video\)/gi, '')
+        .replace(/\[Official Audio\]/gi, '')
+        .replace(/\[Official Video\]/gi, '');
+      const cover = item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || '';
+      const videoId = item.id?.videoId;
+
+      return {
+        id: videoId,
+        videoId: videoId,
+        title: cleanTitle.trim() || 'Untitled Track',
+        artist: item.snippet?.channelTitle || 'YouTube Artist',
+        artist_name: item.snippet?.channelTitle || 'YouTube Artist',
+        album: 'Official Single',
+        cover: cover,
+        cover_url: cover,
+        image: cover,
+        image_url: cover,
+        duration: 210,
+      };
+    });
+  } catch (err) {
+    console.error('Failed to search YouTube API:', err);
+    return [];
+  }
+};
+
+
 
 
 
