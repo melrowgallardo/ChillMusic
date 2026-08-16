@@ -57,12 +57,6 @@ const Navbar = () => {
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Settings">
-          <IconButton onClick={() => navigate('/settings')} sx={{ color: 'var(--text-secondary)' }}>
-            <SettingsIcon />
-          </IconButton>
-        </Tooltip>
-
         {user ? (
           <>
             <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0.5 }}>
