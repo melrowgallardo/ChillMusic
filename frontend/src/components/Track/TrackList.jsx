@@ -3,7 +3,9 @@ import { Box, Typography } from '@mui/material';
 import TrackRow from './TrackRow';
 
 const TrackList = ({ tracks = [], onAddToPlaylist, onRemoveTrack }) => {
-  if (!tracks.length) {
+  const trackList = Array.isArray(tracks) ? tracks : [];
+
+  if (!trackList.length) {
     return (
       <Box sx={{ p: 4, textAlign: 'center', color: 'var(--text-muted)' }}>
         <Typography variant="body1">No tracks available.</Typography>
@@ -34,12 +36,12 @@ const TrackList = ({ tracks = [], onAddToPlaylist, onRemoveTrack }) => {
       </Box>
 
       {/* Rows */}
-      {tracks.map((track, idx) => (
+      {trackList.map((track, idx) => (
         <TrackRow
-          key={`${track.id}-${idx}`}
+          key={`${track?.id || track?.videoId || idx}-${idx}`}
           track={track}
           index={idx}
-          queue={tracks}
+          queue={trackList}
           onAddToPlaylist={onAddToPlaylist}
           onRemoveTrack={onRemoveTrack}
         />
@@ -47,5 +49,6 @@ const TrackList = ({ tracks = [], onAddToPlaylist, onRemoveTrack }) => {
     </Box>
   );
 };
+
 
 export default TrackList;

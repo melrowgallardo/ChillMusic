@@ -34,7 +34,15 @@ const Home = () => {
   const [artists, setArtists] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const displayedRecent = recentlyPlayed && recentlyPlayed.length > 0 ? recentlyPlayed : recentTracks;
+  const safeRecentlyPlayed = Array.isArray(recentlyPlayed) ? recentlyPlayed : [];
+  const safeRecentTracks = Array.isArray(recentTracks) ? recentTracks : [];
+  const safeHitsTracks = Array.isArray(hitsTracks) ? hitsTracks : [];
+  const safeTrendingTracks = Array.isArray(trendingTracks) ? trendingTracks : [];
+  const safeNewReleaseTracks = Array.isArray(newReleaseTracks) ? newReleaseTracks : [];
+  const safeChillTracks = Array.isArray(chillTracks) ? chillTracks : [];
+
+  const displayedRecent = safeRecentlyPlayed.length > 0 ? safeRecentlyPlayed : safeRecentTracks;
+
 
   useEffect(() => {
     let isMounted = true;

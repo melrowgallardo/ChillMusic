@@ -18,10 +18,12 @@ class ErrorBoundary extends React.Component {
 
   handleReload = () => {
     try {
-      localStorage.removeItem('user');
+      localStorage.clear();
+      sessionStorage.clear();
     } catch (e) {}
-    window.location.reload();
+    window.location.href = '/';
   };
+
 
   render() {
     if (this.state.hasError) {

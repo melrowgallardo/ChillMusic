@@ -8,6 +8,7 @@ import { resolveFullAudioTrack, isPreviewUrl } from '../services/audioResolver';
 import { getFullAudioStream, fetchYouTubeVideoId } from '../services/musicApi';
 
 import { normalizeTrack } from '../utils/trackUtils';
+import { getSafeStorageItem } from '../utils/storage';
 
 const PlayerContext = createContext();
 
@@ -30,15 +31,9 @@ export const PlayerProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
 
   const [recentlyPlayed, setRecentlyPlayed] = useState(() => {
-    try {
-      const savedUser = localStorage.getItem('user');
-      const parsedUser = savedUser ? JSON.parse(savedUser) : null;
-      const userKey = `recently_played_${user?.uid || user?.id || parsedUser?.uid || parsedUser?.id || 'guest'}`;
-      const saved = localStorage.getItem(userKey) || localStorage.getItem('chillmusic_recently_played');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
+    const userKey = `recently_played_${user?.uid || user?.id || 'guest'}`;
+    const res = getSafeStorageItem(userKey, null) || getSafeStorageItem('chillmusic_recently_played', []);
+    return Array.isArray(res) ? res : [];
   });
 
   const addToRecentlyPlayed = (track) => {
@@ -46,7 +41,8 @@ export const PlayerProvider = ({ children }) => {
     const norm = normalizeTrack(track);
     setRecentlyPlayed((prevList) => {
       const trackId = norm.id || norm.videoId;
-      const filtered = (prevList || []).filter(
+      const safeList = Array.isArray(prevList) ? prevList : [];
+      const filtered = safeList.filter(
         (t) =>
           (t.id || t.videoId) !== trackId &&
           !(t.title === norm.title && (t.artist === norm.artist || t.artist_name === norm.artist_name))
@@ -68,13 +64,16 @@ export const PlayerProvider = ({ children }) => {
   }, [currentTrack?.id, currentTrack?.videoId, isPlaying]);
 
   const [favorites, setFavorites] = useState(() => {
-    try {
-      const saved = localStorage.getItem('chillmusic_favorites');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
+    const res = getSafeStorageItem('chillmusic_favorites', []);
+    return Array.isArray(res) ? res : [];
   });
+
+  const [playlists, setPlaylists] = useState(() => {
+    const userKey = `custom_playlists_${user?.uid || user?.id || 'guest'}`;
+    const res = getSafeStorageItem(userKey, []);
+    return Array.isArray(res) ? res : [];
+  });
+
 
   const toggleFavorite = (track) => {
     if (!track || (!track.id && !track.song_id)) return;
@@ -650,13 +649,16 @@ export const PlayerProvider = ({ children }) => {
         removeFromQueue,
         clearQueue,
         geminiSmartShuffle,
-        recentlyPlayed,
+        recentlyPlayed: Array.isArray(recentlyPlayed) ? recentlyPlayed : [],
         addToRecentlyPlayed,
-        favorites,
+        favorites: Array.isArray(favorites) ? favorites : [],
         toggleFavorite,
         isFavorite,
+        playlists: Array.isArray(playlists) ? playlists : [],
+        setPlaylists,
       }}
     >
+
       {children}
     </PlayerContext.Provider>
   );

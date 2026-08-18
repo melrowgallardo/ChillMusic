@@ -196,21 +196,21 @@ const Search = () => {
           '& .MuiTabs-indicator': { backgroundColor: 'var(--accent-primary)', height: 3 },
         }}
       >
-        <Tab label={`Songs (${songs.length})`} sx={{ fontWeight: 700 }} />
-        <Tab label={`Artists (${artists.length})`} sx={{ fontWeight: 700 }} />
-        <Tab label={`Albums (${albums.length})`} sx={{ fontWeight: 700 }} />
-        <Tab label={`Playlists (${playlists.length})`} sx={{ fontWeight: 700 }} />
+        <Tab label={`Songs (${(Array.isArray(songs) ? songs : []).length})`} sx={{ fontWeight: 700 }} />
+        <Tab label={`Artists (${(Array.isArray(artists) ? artists : []).length})`} sx={{ fontWeight: 700 }} />
+        <Tab label={`Albums (${(Array.isArray(albums) ? albums : []).length})`} sx={{ fontWeight: 700 }} />
+        <Tab label={`Playlists (${(Array.isArray(playlists) ? playlists : []).length})`} sx={{ fontWeight: 700 }} />
       </Tabs>
 
       {loading ? (
         <LoadingSpinner message="Searching YouTube music catalog..." />
       ) : (
         <Box sx={{ mt: 1 }}>
-          {activeTab === 0 && <TrackList tracks={songs} />}
+          {activeTab === 0 && <TrackList tracks={Array.isArray(songs) ? songs : []} />}
 
           {activeTab === 1 && (
             <Grid container spacing={2.5}>
-              {artists.map((artist) => (
+              {(Array.isArray(artists) ? artists : []).map((artist) => (
                 <Grid item xs={6} sm={4} md={3} lg={2} key={artist.id}>
                   <ArtistCard artist={artist} />
                 </Grid>
@@ -220,7 +220,7 @@ const Search = () => {
 
           {activeTab === 2 && (
             <Grid container spacing={2.5}>
-              {albums.map((album) => (
+              {(Array.isArray(albums) ? albums : []).map((album) => (
                 <Grid item xs={6} sm={4} md={3} lg={2} key={album.id}>
                   <AlbumCard album={album} />
                 </Grid>
@@ -230,7 +230,7 @@ const Search = () => {
 
           {activeTab === 3 && (
             <Grid container spacing={2.5}>
-              {playlists.map((playlist) => (
+              {(Array.isArray(playlists) ? playlists : []).map((playlist) => (
                 <Grid item xs={6} sm={4} md={3} lg={2} key={playlist.id}>
                   <PlaylistCard playlist={playlist} />
                 </Grid>
@@ -239,6 +239,7 @@ const Search = () => {
           )}
         </Box>
       )}
+
     </Box>
   );
 };

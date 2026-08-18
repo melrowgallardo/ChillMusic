@@ -12,47 +12,18 @@ import {
   deleteUser,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { getSafeStorageItem } from '../utils/storage';
+
+export { getSafeStorageItem };
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    let initialUser = null;
-    try {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
-        initialUser = JSON.parse(storedUser);
-      }
-    } catch (e) {
-      console.warn('Failed to parse cached user:', e);
-      localStorage.removeItem('user');
-    }
-    return initialUser;
-  });
-
-  const [token, setToken] = useState(() => {
-    try {
-      const storedToken = localStorage.getItem('access_token') || localStorage.getItem('token');
-      if (storedToken && storedToken !== 'undefined' && storedToken !== 'null') {
-        return storedToken;
-      }
-    } catch (e) {
-      console.warn('Failed to read access token:', e);
-    }
-    return null;
-  });
-
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      const storedToken = localStorage.getItem('access_token') || localStorage.getItem('token');
-      return !!(storedUser && storedUser !== 'undefined' && storedUser !== 'null') || !!(storedToken && storedToken !== 'undefined' && storedToken !== 'null');
-    } catch (e) {
-      return false;
-    }
-  });
-
+  const [user, setUser] = useState(() => getSafeStorageItem('user', null));
+  const [token, setToken] = useState(() => getSafeStorageItem('access_token', null) || getSafeStorageItem('token', null));
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getSafeStorageItem('user', null) || !!getSafeStorageItem('access_token', null) || !!getSafeStorageItem('token', null));
   const [loading, setLoading] = useState(true);
+
 
 
   useEffect(() => {
