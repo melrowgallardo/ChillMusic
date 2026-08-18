@@ -391,7 +391,7 @@ const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword,
       {/* CONFIRM DELETE DIALOG */}
       <Dialog
         open={openConfirmDelete}
-        onClose={() => setOpenConfirmDelete(false)}
+        onClose={() => !isDeleting && setOpenConfirmDelete(false)}
         PaperProps={{
           sx: {
             backgroundColor: 'var(--bg-surface, #18181b)',
@@ -403,11 +403,11 @@ const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword,
         }}
       >
         <DialogTitle sx={{ fontWeight: 800, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 1 }}>
-          <WarningAmberIcon /> Delete Account Confirmation
+          <WarningAmberIcon /> Confirm Permanent Deletion
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            Are you sure you want to permanently delete your account? This action cannot be undone and will remove all your playlists and favorites.
+            Are you sure you want to permanently delete your account? All your saved tracks and playlists will be lost forever.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -422,10 +422,11 @@ const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword,
             startIcon={isDeleting ? <CircularProgress size={18} color="inherit" /> : <DeleteForeverIcon />}
             sx={{ backgroundColor: '#ef4444', fontWeight: 700, '&:hover': { backgroundColor: '#dc2626' } }}
           >
-            {isDeleting ? 'Deleting...' : 'Confirm Delete'}
+            {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
           </Button>
         </DialogActions>
       </Dialog>
+
     </>
   );
 };

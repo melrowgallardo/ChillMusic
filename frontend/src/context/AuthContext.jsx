@@ -163,15 +163,15 @@ export const AuthProvider = ({ children }) => {
 
   const deleteAccount = async () => {
     try {
-      const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
       if (token) {
-        await fetch('/api/users/me', {
+        await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/delete-account`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-        }).catch((e) => console.warn('Backend delete call completed with fallback:', e));
+        }).catch((e) => console.warn('Backend delete-account completed with fallback:', e));
       }
 
       const uid = user?.uid || user?.id || auth.currentUser?.uid;
@@ -189,32 +189,18 @@ export const AuthProvider = ({ children }) => {
           console.warn('Firebase delete user warning:', e);
         }
       }
-
-      // 1. Wipe all local data associated with user
-      const keysToRemove = [
-        'token',
-        'access_token',
-        'refresh_token',
-        'user',
-        'chillmusic_user',
-        `recently_played_${user?.id || 'guest'}`,
-        `favorites_${user?.id || 'guest'}`,
-        `custom_playlists_${user?.id || 'guest'}`
-      ];
-      keysToRemove.forEach((k) => localStorage.removeItem(k));
+    } catch (err) {
+      console.error('Failed to delete user account on backend:', err);
+    } finally {
+      // Clear all stored credentials and sessions
+      localStorage.clear();
       sessionStorage.clear();
-
-      // 2. Reset auth state
       setUser(null);
       setIsAuthenticated(false);
-
-      // 3. Force redirect to Register/Login page
-      window.location.href = '/login';
-    } catch (err) {
-      console.error('Failed to delete account:', err);
-      alert('Failed to delete account. Please try again.');
+      window.location.replace('/login');
     }
   };
+
 
   return (
     <AuthContext.Provider

@@ -3,11 +3,13 @@ from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from app.config import settings
 from app.database.session import get_db
+from app.models import models
 from app.models.models import User, Setting
 from app.schemas.schemas import UserRegister, UserLogin, Token, TokenRefresh, UserProfile
 from app.auth.jwt import get_password_hash, verify_password, create_access_token, create_refresh_token, get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
 
 @router.post("/register", response_model=UserProfile, status_code=status.HTTP_201_CREATED)
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
@@ -86,4 +88,25 @@ def delete_auth_account(current_user: User = Depends(get_current_user), db: Sess
     db.delete(current_user)
     db.commit()
     return {"status": "success", "message": "Account successfully deleted"}
+
+@router.delete("/delete-account", status_code=200)
+def delete_account(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if hasattr(models, 'Favorite'):
+        db.query(models.Favorite).filter(models.Favorite.user_id == current_user.id).delete()
+    if hasattr(models, 'Playlist'):
+        db.query(models.Playlist).filter(models.Playlist.user_id == current_user.id).delete()
+    if hasattr(models, 'History'):
+        db.query(models.History).filter(models.History.user_id == current_user.id).delete()
+    if hasattr(models, 'Download'):
+        db.query(models.Download).filter(models.Download.user_id == current_user.id).delete()
+    if hasattr(models, 'Setting'):
+        db.query(models.Setting).filter(models.Setting.user_id == current_user.id).delete()
+
+    db.delete(current_user)
+    db.commit()
+    return {"message": "User successfully deleted from database"}
+
 
