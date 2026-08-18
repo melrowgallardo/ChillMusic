@@ -16,6 +16,7 @@ import Favorites from './pages/Favorites';
 import RecentlyPlayed from './pages/RecentlyPlayed';
 import Downloads from './pages/Downloads';
 import Profile from './pages/Profile';
+import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
@@ -58,8 +59,8 @@ function App() {
                     <Route path="playlist/:id" element={<PlaylistDetail />} />
                     <Route path="artist/:id" element={<ArtistDetail />} />
                     <Route path="album/:id" element={<AlbumDetail />} />
-                    <Route path="profile" element={<Profile />} />
-                    <Route path="settings" element={<Profile />} />
+                    <Route path="profile" element={<Settings />} />
+                    <Route path="settings" element={<Settings />} />
                   </Route>
                 </Route>
 
@@ -73,5 +74,6 @@ function App() {
     </ThemeProvider>
   );
 }
+
 
 export default App;

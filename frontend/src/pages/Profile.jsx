@@ -27,7 +27,7 @@ import SettingsModal from '../components/Settings/SettingsModal';
 
 const Profile = () => {
   const navigate = useNavigate();
-  const { user, logout, updateUserProfile, changePassword, deleteAccount } = useAuth();
+  const { user, logout, loading: authLoading, updateUserProfile, changePassword, deleteAccount } = useAuth();
   const { clearQueue } = usePlayer();
   const { mode, toggleTheme } = useThemeMode();
   const { isOnline, syncing, syncOfflineData } = useOffline();
@@ -70,16 +70,18 @@ const Profile = () => {
   };
 
   const handleLogout = async () => {
-    clearQueue();
-    await logout();
+    if (clearQueue) clearQueue();
+    if (logout) await logout();
     navigate('/login');
   };
 
-  if (!user) return <Typography sx={{ p: 4 }}>Please log in to view profile.</Typography>;
-  if (loading) return <LoadingSpinner message="Loading user profile & settings..." />;
+  if (authLoading || loading) return <LoadingSpinner message="Loading user profile & settings..." />;
 
+  const safeUsername = user?.username || user?.displayName || user?.name || 'Music Lover';
+  const safeEmail = user?.email || 'No email provided';
   const currentAvatar =
-    user.avatar_url || user.avatar || user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username || 'User'}`;
+    user?.avatar_url || user?.avatar || user?.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${safeUsername}`;
+
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 4, pb: 6 }}>
