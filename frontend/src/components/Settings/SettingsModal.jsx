@@ -24,8 +24,9 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import PersonIcon from '@mui/icons-material/Person';
-import SecurityIcon from '@mui/icons-material/Security';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+
 
 const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=ChillVibes1',
@@ -35,9 +36,14 @@ const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/bottts/svg?seed=GrooveAgent5',
 ];
 
-const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword, deleteAccount, showToast }) => {
+const SettingsModal = ({ open, onClose, user: propUser, updateUserProfile, changePassword, deleteAccount: propDeleteAccount, showToast }) => {
   const navigate = useNavigate();
+  const auth = useAuth() || {};
+  const user = propUser || auth.user;
+  const deleteAccount = propDeleteAccount || auth.deleteAccount;
+
   const [activeTab, setActiveTab] = useState(0);
+
 
   // Form states
   const [username, setUsername] = useState('');
@@ -145,20 +151,37 @@ const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword,
     }
   };
 
-  const handleDeleteAccount = async () => {
+  const handlePermanentDelete = async (e) => {
+    if (e) e.preventDefault();
     setIsDeleting(true);
     try {
-      await deleteAccount();
-      if (showToast) showToast('Account deleted successfully', 'info');
-      onClose();
+      if (typeof deleteAccount === 'function') {
+        await deleteAccount();
+      } else {
+        // Immediate hard fallback wipe
+        const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        if (token && apiUrl) {
+          await fetch(`${apiUrl}/api/auth/delete-account`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }).catch((err) => console.warn('API wipe error:', err));
+        }
+      }
     } catch (err) {
-      console.error('Failed to delete account:', err);
-      if (showToast) showToast('Failed to delete account. Please try again.', 'error');
+      console.error('Permanent delete error:', err);
     } finally {
-      setIsDeleting(false);
-      setOpenConfirmDelete(false);
+      // Hard wipe all storage keys
+      localStorage.clear();
+      sessionStorage.clear();
+      // Force browser navigation to login page
+      window.location.href = '/login';
     }
   };
+
 
 
   return (
@@ -414,18 +437,31 @@ const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword,
           <Button onClick={() => setOpenConfirmDelete(false)} disabled={isDeleting} sx={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
             Cancel
           </Button>
-          <Button
-            onClick={handleDeleteAccount}
+          <button
+            type="button"
+            onClick={handlePermanentDelete}
             disabled={isDeleting}
-            variant="contained"
-            color="error"
-            startIcon={isDeleting ? <CircularProgress size={18} color="inherit" /> : <DeleteForeverIcon />}
-            sx={{ backgroundColor: '#ef4444', fontWeight: 700, '&:hover': { backgroundColor: '#dc2626' } }}
+            className="delete-confirm-btn"
+            style={{
+              cursor: 'pointer',
+              backgroundColor: '#ef4444',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              fontWeight: 700,
+              fontSize: '0.875rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: isDeleting ? 0.7 : 1,
+            }}
           >
-            {isDeleting ? 'Deleting...' : 'Yes, Delete My Account'}
-          </Button>
+            {isDeleting ? 'Deleting...' : '🗑️ YES, DELETE MY ACCOUNT'}
+          </button>
         </DialogActions>
       </Dialog>
+
 
     </>
   );
