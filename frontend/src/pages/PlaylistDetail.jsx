@@ -126,7 +126,8 @@ const PlaylistDetail = () => {
     activePlaylist.zip ||
     'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
   const title = activePlaylist.title || activePlaylist.name || 'Official Playlist';
-  const isOwner = user && activePlaylist.user_id === user.id;
+  const isOwner = user && (activePlaylist.user_id === user?.id || activePlaylist.user_id === user?.uid);
+
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
