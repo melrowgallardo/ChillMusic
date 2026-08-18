@@ -16,13 +16,30 @@ import { getSafeStorageItem } from '../utils/storage';
 
 export { getSafeStorageItem };
 
+export const getInitialUser = () => {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw || raw === 'undefined' || raw === 'null') return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    localStorage.removeItem('user');
+    return null;
+  }
+};
+
+export const getInitialToken = () => {
+  const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+  return token && token !== 'undefined' && token !== 'null' ? token : null;
+};
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => getSafeStorageItem('user', null));
-  const [token, setToken] = useState(() => getSafeStorageItem('access_token', null) || getSafeStorageItem('token', null));
-  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getSafeStorageItem('user', null) || !!getSafeStorageItem('access_token', null) || !!getSafeStorageItem('token', null));
+  const [user, setUser] = useState(() => getInitialUser());
+  const [token, setToken] = useState(() => getInitialToken());
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getInitialUser() || !!getInitialToken());
   const [loading, setLoading] = useState(true);
+
 
 
 

@@ -621,8 +621,9 @@ export const PlayerProvider = ({ children }) => {
         setIsPlaying,
         setDuration,
         setCurrentTime,
-        queue,
+        queue: Array.isArray(queue) ? queue : [],
         currentIndex,
+
         volume,
         isMuted,
         currentTime,

@@ -1,7 +1,7 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { PlayerProvider } from './context/PlayerContext';
 import { OfflineProvider } from './context/OfflineContext';
 import MainLayout from './components/Layout/MainLayout';
@@ -18,17 +18,35 @@ import Downloads from './pages/Downloads';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import ErrorBoundary from './components/Common/ErrorBoundary';
+
+export const ProtectedRoute = () => {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return null;
+  return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
+};
+
+export const PublicOnlyRoute = () => {
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) return null;
+  return !isAuthenticated ? <Outlet /> : <Navigate to="/" replace />;
+};
 
 function App() {
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <PlayerProvider>
-            <OfflineProvider>
-              <Router>
-                <Routes>
+    <ThemeProvider>
+      <AuthProvider>
+        <PlayerProvider>
+          <OfflineProvider>
+            <Router>
+              <Routes>
+                {/* Public Only Guest Routes */}
+                <Route element={<PublicOnlyRoute />}>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                </Route>
+
+                {/* Authenticated Protected App Routes */}
+                <Route element={<ProtectedRoute />}>
                   <Route path="/" element={<MainLayout />}>
                     <Route index element={<Home />} />
                     <Route path="search" element={<Search />} />
@@ -42,16 +60,17 @@ function App() {
                     <Route path="album/:id" element={<AlbumDetail />} />
                     <Route path="profile" element={<Profile />} />
                     <Route path="settings" element={<Profile />} />
-                    <Route path="login" element={<Login />} />
-                    <Route path="register" element={<Register />} />
                   </Route>
-                </Routes>
-              </Router>
-            </OfflineProvider>
-          </PlayerProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
+                </Route>
+
+                {/* Catch-all fallback */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Router>
+          </OfflineProvider>
+        </PlayerProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

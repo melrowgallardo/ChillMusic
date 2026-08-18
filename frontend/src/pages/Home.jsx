@@ -339,7 +339,7 @@ const Home = () => {
           </Box>
           <Box sx={{ display: 'flex', gap: 2.5, overflowX: 'auto', pb: 2, scrollSnapType: 'x mandatory', '&::-webkit-scrollbar': { display: 'none' }, WebkitOverflowScrolling: 'touch', mx: -2, px: 2 }}>
             {displayedRecent.map((track) => (
-              <Box key={`recent-${track.id}`} sx={{ minWidth: { xs: 150, sm: 180, md: 200 }, scrollSnapAlign: 'start' }}>
+              <Box key={`recent-${track?.id || track?.videoId || Math.random()}`} sx={{ minWidth: { xs: 150, sm: 180, md: 200 }, scrollSnapAlign: 'start' }}>
                 <TrackCard track={track} queue={displayedRecent} />
               </Box>
             ))}
@@ -348,15 +348,15 @@ const Home = () => {
       )}
 
       {/* YouTube Music Hits Section */}
-      {hitsTracks.length > 0 && (
+      {safeHitsTracks.length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             📺 YouTube Music Hits
           </Typography>
           <Box sx={{ display: 'flex', gap: 2.5, overflowX: 'auto', pb: 2, scrollSnapType: 'x mandatory', '&::-webkit-scrollbar': { display: 'none' }, WebkitOverflowScrolling: 'touch', mx: -2, px: 2 }}>
-            {hitsTracks.slice(0, 10).map((track) => (
-              <Box key={`yt-${track.id}`} sx={{ minWidth: { xs: 150, sm: 180, md: 200 }, scrollSnapAlign: 'start' }}>
-                <TrackCard track={track} queue={hitsTracks} />
+            {safeHitsTracks.slice(0, 10).map((track) => (
+              <Box key={`yt-${track?.id || track?.videoId || Math.random()}`} sx={{ minWidth: { xs: 150, sm: 180, md: 200 }, scrollSnapAlign: 'start' }}>
+                <TrackCard track={track} queue={safeHitsTracks} />
               </Box>
             ))}
           </Box>
@@ -364,15 +364,15 @@ const Home = () => {
       )}
 
       {/* Trending Section */}
-      {trendingTracks.length > 0 && (
+      {safeTrendingTracks.length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             🔥 Trending Songs
           </Typography>
           <Box sx={{ display: 'flex', gap: 2.5, overflowX: 'auto', pb: 2, scrollSnapType: 'x mandatory', '&::-webkit-scrollbar': { display: 'none' }, WebkitOverflowScrolling: 'touch', mx: -2, px: 2 }}>
-            {trendingTracks.slice(0, 10).map((track) => (
-              <Box key={`tr-${track.id}`} sx={{ minWidth: { xs: 150, sm: 180, md: 200 }, scrollSnapAlign: 'start' }}>
-                <TrackCard track={track} queue={trendingTracks} />
+            {safeTrendingTracks.slice(0, 10).map((track) => (
+              <Box key={`tr-${track?.id || track?.videoId || Math.random()}`} sx={{ minWidth: { xs: 150, sm: 180, md: 200 }, scrollSnapAlign: 'start' }}>
+                <TrackCard track={track} queue={safeTrendingTracks} />
               </Box>
             ))}
           </Box>
@@ -380,15 +380,15 @@ const Home = () => {
       )}
 
       {/* New Releases Section */}
-      {newReleaseTracks.length > 0 && (
+      {safeNewReleaseTracks.length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             ✨ New Releases
           </Typography>
           <Grid container spacing={2.5}>
-            {newReleaseTracks.slice(0, 12).map((track) => (
-              <Grid item xs={6} sm={4} md={2} key={`nr-${track.id}`}>
-                <TrackCard track={track} queue={newReleaseTracks} />
+            {safeNewReleaseTracks.slice(0, 12).map((track) => (
+              <Grid item xs={6} sm={4} md={2} key={`nr-${track?.id || track?.videoId || Math.random()}`}>
+                <TrackCard track={track} queue={safeNewReleaseTracks} />
               </Grid>
             ))}
           </Grid>
@@ -396,15 +396,15 @@ const Home = () => {
       )}
 
       {/* Recommendations */}
-      {chillTracks.length > 0 && (
+      {safeChillTracks.length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             🎧 Recommended Chill Vibes
           </Typography>
           <Grid container spacing={2.5}>
-            {chillTracks.slice(0, 12).map((track) => (
-              <Grid item xs={6} sm={4} md={2} key={`chill-${track.id}`}>
-                <TrackCard track={track} queue={chillTracks} />
+            {safeChillTracks.slice(0, 12).map((track) => (
+              <Grid item xs={6} sm={4} md={2} key={`chill-${track?.id || track?.videoId || Math.random()}`}>
+                <TrackCard track={track} queue={safeChillTracks} />
               </Grid>
             ))}
           </Grid>
@@ -412,14 +412,14 @@ const Home = () => {
       )}
 
       {/* Featured Playlists */}
-      {featuredPlaylists.length > 0 && (
+      {(Array.isArray(featuredPlaylists) ? featuredPlaylists : []).length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             🎶 Featured Playlists
           </Typography>
           <Grid container spacing={2.5}>
-            {featuredPlaylists.map((playlist) => (
-              <Grid item xs={6} sm={4} md={2} key={`pl-${playlist.id}`}>
+            {(Array.isArray(featuredPlaylists) ? featuredPlaylists : []).map((playlist) => (
+              <Grid item xs={6} sm={4} md={2} key={`pl-${playlist?.id || Math.random()}`}>
                 <PlaylistCard playlist={playlist} />
               </Grid>
             ))}
@@ -428,20 +428,21 @@ const Home = () => {
       )}
 
       {/* Top Artists */}
-      {artists.length > 0 && (
+      {(Array.isArray(artists) ? artists : []).length > 0 && (
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, fontFamily: 'var(--font-heading)' }}>
             🌟 Popular Artists
           </Typography>
           <Grid container spacing={2.5}>
-            {artists.map((artist) => (
-              <Grid item xs={6} sm={4} md={2} key={`art-${artist.id}`}>
+            {(Array.isArray(artists) ? artists : []).map((artist) => (
+              <Grid item xs={6} sm={4} md={2} key={`art-${artist?.id || Math.random()}`}>
                 <ArtistCard artist={artist} />
               </Grid>
             ))}
           </Grid>
         </Box>
       )}
+
     </Box>
   );
 };
