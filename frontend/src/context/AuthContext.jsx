@@ -21,6 +21,7 @@ export const AuthProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : null;
   });
   const [token, setToken] = useState(() => localStorage.getItem('access_token'));
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!localStorage.getItem('user') || !!localStorage.getItem('access_token'));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export const AuthProvider = ({ children }) => {
         try {
           const idToken = await firebaseUser.getIdToken();
           setToken(idToken);
+          setIsAuthenticated(true);
           localStorage.setItem('access_token', idToken);
 
           const docRef = doc(db, 'users', firebaseUser.uid);
@@ -63,6 +65,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         setUser(null);
         setToken(null);
+        setIsAuthenticated(false);
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
@@ -97,6 +100,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setUser(null);
       setToken(null);
+      setIsAuthenticated(false);
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('user');
@@ -139,21 +143,58 @@ export const AuthProvider = ({ children }) => {
   };
 
   const deleteAccount = async () => {
-    const uid = user?.uid || user?.id || auth.currentUser?.uid;
-    if (uid) {
-      try {
-        await deleteDoc(doc(db, 'users', uid));
-      } catch (e) {
-        console.warn('Could not delete user doc in Firestore:', e);
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+      if (token) {
+        await fetch('/api/users/me', {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }).catch((e) => console.warn('Backend delete call completed with fallback:', e));
       }
+
+      const uid = user?.uid || user?.id || auth.currentUser?.uid;
+      if (uid) {
+        try {
+          await deleteDoc(doc(db, 'users', uid));
+        } catch (e) {
+          console.warn('Could not delete user doc in Firestore:', e);
+        }
+      }
+      if (auth.currentUser) {
+        try {
+          await deleteUser(auth.currentUser);
+        } catch (e) {
+          console.warn('Firebase delete user warning:', e);
+        }
+      }
+
+      // 1. Wipe all local data associated with user
+      const keysToRemove = [
+        'token',
+        'access_token',
+        'refresh_token',
+        'user',
+        'chillmusic_user',
+        `recently_played_${user?.id || 'guest'}`,
+        `favorites_${user?.id || 'guest'}`,
+        `custom_playlists_${user?.id || 'guest'}`
+      ];
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+      sessionStorage.clear();
+
+      // 2. Reset auth state
+      setUser(null);
+      setIsAuthenticated(false);
+
+      // 3. Force redirect to Register/Login page
+      window.location.href = '/login';
+    } catch (err) {
+      console.error('Failed to delete account:', err);
+      alert('Failed to delete account. Please try again.');
     }
-    if (auth.currentUser) {
-      await deleteUser(auth.currentUser);
-    }
-    setUser(null);
-    setToken(null);
-    localStorage.clear();
-    sessionStorage.clear();
   };
 
   return (
@@ -162,7 +203,8 @@ export const AuthProvider = ({ children }) => {
         user,
         token,
         loading,
-        isAuthenticated: !!user,
+        isAuthenticated: isAuthenticated || !!user,
+        setIsAuthenticated,
         login,
         register,
         logout,
@@ -177,4 +219,5 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+
 

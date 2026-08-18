@@ -1,9 +1,13 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 from app.config import settings
-from app.database.session import engine, Base
+from app.database.session import engine, Base, get_db
+from app.models.models import User
+from app.auth.jwt import get_current_user
 from app.routers import auth, user, songs, artists, albums, playlists, favorites, history, downloads, youtube, deezer, lyrics
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -43,8 +47,15 @@ app.include_router(youtube.router)
 app.include_router(deezer.router)
 app.include_router(lyrics.router)
 
+@app.delete("/api/users/me")
+def delete_users_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db.delete(current_user)
+    db.commit()
+    return {"status": "success", "message": "Account successfully deleted"}
+
 @app.get("/")
 def root():
+
     return {
         "app": settings.APP_NAME,
         "status": "online",

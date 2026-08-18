@@ -14,7 +14,9 @@ import {
   Tab,
   Paper,
   Grid,
+  CircularProgress,
 } from '@mui/material';
+
 import CloseIcon from '@mui/icons-material/Close';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import SaveIcon from '@mui/icons-material/Save';
@@ -149,17 +151,15 @@ const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword,
       await deleteAccount();
       if (showToast) showToast('Account deleted successfully', 'info');
       onClose();
-      setTimeout(() => {
-        navigate('/login');
-      }, 1000);
     } catch (err) {
       console.error('Failed to delete account:', err);
-      if (showToast) showToast('Failed to delete account: ' + (err.message || err), 'error');
+      if (showToast) showToast('Failed to delete account. Please try again.', 'error');
     } finally {
       setIsDeleting(false);
       setOpenConfirmDelete(false);
     }
   };
+
 
   return (
     <>
@@ -411,7 +411,7 @@ const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword,
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setOpenConfirmDelete(false)} sx={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+          <Button onClick={() => setOpenConfirmDelete(false)} disabled={isDeleting} sx={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
             Cancel
           </Button>
           <Button
@@ -419,6 +419,7 @@ const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword,
             disabled={isDeleting}
             variant="contained"
             color="error"
+            startIcon={isDeleting ? <CircularProgress size={18} color="inherit" /> : <DeleteForeverIcon />}
             sx={{ backgroundColor: '#ef4444', fontWeight: 700, '&:hover': { backgroundColor: '#dc2626' } }}
           >
             {isDeleting ? 'Deleting...' : 'Confirm Delete'}
@@ -428,5 +429,6 @@ const SettingsModal = ({ open, onClose, user, updateUserProfile, changePassword,
     </>
   );
 };
+
 
 export default SettingsModal;

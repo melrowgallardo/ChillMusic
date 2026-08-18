@@ -55,3 +55,10 @@ def update_settings(setting_update: SettingBase, current_user: User = Depends(ge
     db.commit()
     db.refresh(setting)
     return setting
+
+@router.delete("/me")
+def delete_user(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db.delete(current_user)
+    db.commit()
+    return {"status": "success", "message": "Account successfully deleted"}
+

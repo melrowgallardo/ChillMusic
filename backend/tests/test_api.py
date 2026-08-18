@@ -60,3 +60,31 @@ def test_trending_songs_endpoint():
         assert "id" in first_song
         assert "title" in first_song
         assert "audio_url" in first_song
+
+def test_delete_account_endpoint():
+    del_user = {
+        "username": "delete_me_user_999",
+        "email": "deleteme999@example.com",
+        "password": "password999"
+    }
+
+    # Register & Login
+    res_reg = client.post("/api/auth/register", json=del_user)
+    assert res_reg.status_code == 201
+
+    res_login = client.post("/api/auth/login", json={
+        "email": del_user["email"],
+        "password": del_user["password"]
+    })
+    assert res_login.status_code == 200
+    token = res_login.json()["access_token"]
+
+    # Delete via /api/users/me
+    res_del = client.delete("/api/users/me", headers={"Authorization": f"Bearer {token}"})
+    assert res_del.status_code == 200
+    assert res_del.json() == {"status": "success", "message": "Account successfully deleted"}
+
+    # Verify user can no longer fetch profile
+    res_prof = client.get("/api/user/profile", headers={"Authorization": f"Bearer {token}"})
+    assert res_prof.status_code == 401
+

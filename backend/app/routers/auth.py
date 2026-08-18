@@ -80,3 +80,10 @@ def refresh_token(token_data: TokenRefresh, db: Session = Depends(get_db)):
 @router.post("/logout")
 def logout(current_user: User = Depends(get_current_user)):
     return {"message": "Successfully logged out"}
+
+@router.delete("/delete")
+def delete_auth_account(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    db.delete(current_user)
+    db.commit()
+    return {"status": "success", "message": "Account successfully deleted"}
+
