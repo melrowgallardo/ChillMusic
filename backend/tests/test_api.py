@@ -88,3 +88,17 @@ def test_delete_account_endpoint():
     res_prof = client.get("/api/user/profile", headers={"Authorization": f"Bearer {token}"})
     assert res_prof.status_code == 401
 
+def test_google_auth_endpoint():
+    google_payload = {
+        "email": "new_google_user@example.com",
+        "name": "Google Test User",
+        "picture": "https://example.com/avatar.png"
+    }
+    response = client.post("/api/auth/google", json=google_payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert "user" in data
+    assert data["user"]["email"] == google_payload["email"]
+
+

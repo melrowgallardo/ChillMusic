@@ -203,24 +203,48 @@ const Register = () => {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, provider);
-      const user = result.user;
+      const googleUser = result.user;
+      const idToken = await googleUser.getIdToken();
+      const userDisplayName = googleUser.displayName || googleUser.email?.split('@')[0] || 'User';
 
-      const userRef = doc(db, 'users', user.uid);
+      const userRef = doc(db, 'users', googleUser.uid);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) {
         await setDoc(userRef, {
-          username: user.displayName || user.email.split('@')[0],
-          email: user.email,
-          photoURL: user.photoURL || '',
+          username: userDisplayName,
+          email: googleUser.email,
+          photoURL: googleUser.photoURL || '',
           isVerified: true,
           createdAt: new Date(),
         });
       }
-      navigate('/');
+
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            credential: idToken,
+            email: googleUser.email,
+            name: userDisplayName,
+            picture: googleUser.photoURL || '',
+          }),
+        });
+
+        const data = await res.json();
+        if (res.ok && data?.user) {
+          localStorage.setItem('access_token', data.access_token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
+      } catch (backendErr) {
+        console.warn('Backend Google Auth Sync Warning:', backendErr);
+      }
+
+      window.location.replace('/');
     } catch (err) {
       console.error('Google Auth error:', err);
       if (err.code !== 'auth/popup-closed-by-user') {
-        setError(formatErrorMessage(err));
+        setError('Failed to sign in with Google. Please try again.');
       }
     } finally {
       setLoading(false);

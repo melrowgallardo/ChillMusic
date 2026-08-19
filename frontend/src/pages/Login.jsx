@@ -22,7 +22,8 @@ import {
   getAdditionalUserInfo,
   signOut,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useAuth } from '../context/AuthContext';
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" style={{ marginRight: 10 }}>
@@ -98,50 +99,70 @@ const Login = () => {
     }
   };
 
+  const authContext = useAuth() || {};
+  const setUser = authContext.setUser;
+  const setIsAuthenticated = authContext.setIsAuthenticated;
+
   const handleGoogleAuth = async () => {
     setError('');
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      // Force account selector to prevent silent cache hangs
       provider.setCustomParameters({ prompt: 'select_account' });
 
       const result = await signInWithPopup(auth, provider);
-      const details = getAdditionalUserInfo(result);
-      const user = result.user;
+      const googleUser = result.user;
+      const idToken = await googleUser.getIdToken();
 
-      // Check Firestore user profile existence
-      const userDocRef = doc(db, 'users', user.uid);
+      // 1. Auto-create user in Firestore if not existing
+      const userDocRef = doc(db, 'users', googleUser.uid);
       const userSnap = await getDoc(userDocRef);
+      const userDisplayName = googleUser.displayName || googleUser.email?.split('@')[0] || 'User';
 
-      if (details?.isNewUser || !userSnap.exists()) {
-        // Clean up: sign out and delete new auth record
-        await signOut(auth);
-        try {
-          await user.delete();
-        } catch (e) {}
-
-        setLoading(false);
-        const warnMsg = '⚠️ This Google account is not registered yet. Please go to Sign Up first to create your account.';
-        setError(warnMsg);
-        setToast({ open: true, message: warnMsg, severity: 'error' });
-        alert(warnMsg);
-        return;
+      if (!userSnap.exists()) {
+        await setDoc(userDocRef, {
+          username: userDisplayName,
+          email: googleUser.email,
+          avatar_url: googleUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${googleUser.email}`,
+          isVerified: true,
+          createdAt: new Date(),
+        });
       }
 
-      // Registered user: Proceed with login
-      console.log('Login successful:', user);
+      // 2. Call backend Google Auth route for auto-registration & tokens
+      try {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            credential: idToken,
+            email: googleUser.email,
+            name: userDisplayName,
+            picture: googleUser.photoURL || '',
+          }),
+        });
+
+        const data = await res.json();
+        if (res.ok && data?.user) {
+          localStorage.setItem('access_token', data.access_token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          if (setUser) setUser(data.user);
+          if (setIsAuthenticated) setIsAuthenticated(true);
+        }
+      } catch (backendErr) {
+        console.warn('Backend Google Auth Sync Warning:', backendErr);
+      }
+
       setLoading(false);
-      navigate('/');
+      window.location.replace('/');
     } catch (err) {
-      console.error('Google Sign In Error:', err);
+      console.error('Google Auth Error:', err);
       if (err.code !== 'auth/popup-closed-by-user') {
-        const errMsg = formatErrorMessage(err);
+        const errMsg = 'Failed to sign in with Google. Please try again.';
         setError(errMsg);
         setToast({ open: true, message: errMsg, severity: 'error' });
       }
     } finally {
-      // ALWAYS reset loading state to avoid infinite loader
       setLoading(false);
     }
   };

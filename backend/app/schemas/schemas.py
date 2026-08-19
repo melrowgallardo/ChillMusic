@@ -20,6 +20,13 @@ class Token(BaseModel):
 class TokenRefresh(BaseModel):
     refresh_token: str
 
+class GoogleAuthSchema(BaseModel):
+    credential: Optional[str] = None
+    token: Optional[str] = None
+    email: Optional[EmailStr] = None
+    name: Optional[str] = None
+    picture: Optional[str] = None
+
 class UserProfile(BaseModel):
     id: int
     username: str

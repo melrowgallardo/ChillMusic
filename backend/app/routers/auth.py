@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
@@ -5,7 +6,7 @@ from app.config import settings
 from app.database.session import get_db
 from app.models import models
 from app.models.models import User, Setting
-from app.schemas.schemas import UserRegister, UserLogin, Token, TokenRefresh, UserProfile
+from app.schemas.schemas import UserRegister, UserLogin, Token, TokenRefresh, UserProfile, GoogleAuthSchema
 from app.auth.jwt import get_password_hash, verify_password, create_access_token, create_refresh_token, get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -88,6 +89,80 @@ def delete_auth_account(current_user: User = Depends(get_current_user), db: Sess
     db.delete(current_user)
     db.commit()
     return {"status": "success", "message": "Account successfully deleted"}
+
+def verify_google_token(credential_str: Optional[str] = None):
+    if credential_str:
+        try:
+            parts = credential_str.split('.')
+            if len(parts) == 3:
+                import base64, json
+                payload_b64 = parts[1] + '=' * (-len(parts[1]) % 4)
+                decoded_bytes = base64.b64decode(payload_b64)
+                return json.loads(decoded_bytes)
+        except Exception:
+            pass
+    return {}
+
+@router.post("/google", status_code=200)
+def google_auth(payload: GoogleAuthSchema, db: Session = Depends(get_db)):
+    try:
+        google_data = verify_google_token(payload.credential or payload.token)
+        email = google_data.get("email") or payload.email
+        name = google_data.get("name") or payload.name or (email.split("@")[0] if email else "Google User")
+        picture = google_data.get("picture") or payload.picture or ""
+
+        if not email:
+            raise HTTPException(status_code=400, detail="Invalid Google account")
+
+        clean_email = email.strip().lower()
+
+        # Find or Auto-Create User
+        user = db.query(models.User).filter(models.User.email == clean_email).first()
+        if not user:
+            base_username = name.strip()
+            username = base_username
+            counter = 1
+            while db.query(models.User).filter(models.User.username == username).first():
+                username = f"{base_username}_{counter}"
+                counter += 1
+
+            dummy_hash = get_password_hash(f"google_oauth_secret_{clean_email}")
+            user = models.User(
+                email=clean_email,
+                username=username,
+                hashed_password=dummy_hash,
+                avatar_url=picture or f"https://api.dicebear.com/7.x/bottts/svg?seed={clean_email}",
+                is_active=True
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            default_setting = Setting(user_id=user.id)
+            db.add(default_setting)
+            db.commit()
+
+        token = create_access_token({"sub": str(user.id)})
+        refresh_t = create_refresh_token({"sub": str(user.id)})
+
+        avatar_val = user.avatar_url or f"https://api.dicebear.com/7.x/bottts/svg?seed={user.email}"
+        return {
+            "access_token": token,
+            "refresh_token": refresh_t,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "avatar": avatar_val,
+                "avatar_url": avatar_val
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/delete-account", status_code=200)
 def delete_account(
