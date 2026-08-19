@@ -114,51 +114,44 @@ const Login = () => {
       const googleUser = result.user;
       const idToken = await googleUser.getIdToken();
 
-      // 1. Auto-create user in Firestore if not existing
+      // Check Firestore & Backend user profile existence
       const userDocRef = doc(db, 'users', googleUser.uid);
       const userSnap = await getDoc(userDocRef);
-      const userDisplayName = googleUser.displayName || googleUser.email?.split('@')[0] || 'User';
 
-      if (!userSnap.exists()) {
-        await setDoc(userDocRef, {
-          username: userDisplayName,
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credential: idToken,
           email: googleUser.email,
-          avatar_url: googleUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${googleUser.email}`,
-          isVerified: true,
-          createdAt: new Date(),
-        });
+          name: googleUser.displayName,
+          picture: googleUser.photoURL || '',
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !userSnap.exists() || !data?.user) {
+        // Sign out temporary auth session and block login
+        await signOut(auth).catch(() => {});
+        const errMsg = data?.detail || 'No account found with this Google email. Please Sign Up first.';
+        setError(errMsg);
+        setToast({ open: true, message: errMsg, severity: 'error' });
+        setLoading(false);
+        return;
       }
 
-      // 2. Call backend Google Auth route for auto-registration & tokens
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/google`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            credential: idToken,
-            email: googleUser.email,
-            name: userDisplayName,
-            picture: googleUser.photoURL || '',
-          }),
-        });
-
-        const data = await res.json();
-        if (res.ok && data?.user) {
-          localStorage.setItem('access_token', data.access_token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-          if (setUser) setUser(data.user);
-          if (setIsAuthenticated) setIsAuthenticated(true);
-        }
-      } catch (backendErr) {
-        console.warn('Backend Google Auth Sync Warning:', backendErr);
-      }
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      if (setUser) setUser(data.user);
+      if (setIsAuthenticated) setIsAuthenticated(true);
 
       setLoading(false);
       window.location.replace('/');
     } catch (err) {
-      console.error('Google Auth Error:', err);
+      console.error('Google Login Error:', err);
       if (err.code !== 'auth/popup-closed-by-user') {
-        const errMsg = 'Failed to sign in with Google. Please try again.';
+        const errMsg = err.message || 'No account found with this Google email. Please Sign Up first.';
         setError(errMsg);
         setToast({ open: true, message: errMsg, severity: 'error' });
       }

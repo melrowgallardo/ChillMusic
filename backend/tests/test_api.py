@@ -90,15 +90,26 @@ def test_delete_account_endpoint():
 
 def test_google_auth_endpoint():
     google_payload = {
-        "email": "new_google_user@example.com",
-        "name": "Google Test User",
+        "email": "unregistered_google_user@example.com",
+        "name": "Unregistered Google User",
         "picture": "https://example.com/avatar.png"
     }
-    response = client.post("/api/auth/google", json=google_payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert "access_token" in data
-    assert "user" in data
-    assert data["user"]["email"] == google_payload["email"]
+
+    # 1. Login attempt with unregistered user should return 404
+    response_login = client.post("/api/auth/google", json=google_payload)
+    assert response_login.status_code == 404
+    assert "No account found" in response_login.json()["detail"]
+
+    # 2. Register via google-register should succeed
+    response_reg = client.post("/api/auth/google-register", json=google_payload)
+    assert response_reg.status_code == 200
+    data_reg = response_reg.json()
+    assert "access_token" in data_reg
+    assert data_reg["user"]["email"] == google_payload["email"]
+
+    # 3. Login attempt after registration should succeed
+    response_login_2 = client.post("/api/auth/google", json=google_payload)
+    assert response_login_2.status_code == 200
+    assert "access_token" in response_login_2.json()
 
 

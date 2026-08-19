@@ -104,7 +104,48 @@ def verify_google_token(credential_str: Optional[str] = None):
     return {}
 
 @router.post("/google", status_code=200)
-def google_auth(payload: GoogleAuthSchema, db: Session = Depends(get_db)):
+def google_login(payload: GoogleAuthSchema, db: Session = Depends(get_db)):
+    try:
+        google_data = verify_google_token(payload.credential or payload.token)
+        email = google_data.get("email") or payload.email
+
+        if not email:
+            raise HTTPException(status_code=400, detail="Invalid Google token.")
+
+        clean_email = email.strip().lower()
+
+        # Check if account exists in database
+        user = db.query(models.User).filter(models.User.email == clean_email).first()
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="No account found with this Google email. Please Sign Up first."
+            )
+
+        token = create_access_token({"sub": str(user.id)})
+        refresh_t = create_refresh_token({"sub": str(user.id)})
+
+        avatar_val = user.avatar_url or f"https://api.dicebear.com/7.x/bottts/svg?seed={user.email}"
+        return {
+            "access_token": token,
+            "refresh_token": refresh_t,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "avatar": avatar_val,
+                "avatar_url": avatar_val
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/google-register", status_code=200)
+def google_register(payload: GoogleAuthSchema, db: Session = Depends(get_db)):
     try:
         google_data = verify_google_token(payload.credential or payload.token)
         email = google_data.get("email") or payload.email
@@ -116,7 +157,6 @@ def google_auth(payload: GoogleAuthSchema, db: Session = Depends(get_db)):
 
         clean_email = email.strip().lower()
 
-        # Find or Auto-Create User
         user = db.query(models.User).filter(models.User.email == clean_email).first()
         if not user:
             base_username = name.strip()

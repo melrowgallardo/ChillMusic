@@ -220,7 +220,7 @@ const Register = () => {
       }
 
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/google`, {
+        const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/google-register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
