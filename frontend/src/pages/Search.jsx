@@ -1,258 +1,151 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Box, Typography, TextField, Tabs, Tab, Grid, Button } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
-import { useSearchParams } from 'react-router-dom';
-import { searchYouTubeTracks, searchYouTubePlaylists } from '../services/youtubeApi';
+import React, { useState } from 'react';
 import { searchYouTubeMusic } from '../services/youtubeService';
-import TrackList from '../components/Track/TrackList';
-import ArtistCard from '../components/Artist/ArtistCard';
-import AlbumCard from '../components/Album/AlbumCard';
-import PlaylistCard from '../components/Playlist/PlaylistCard';
-import LoadingSpinner from '../components/Common/LoadingSpinner';
+import { useMusic } from '../context/MusicContext';
+import { FiSearch, FiPlay, FiPause, FiMoreVertical } from 'react-icons/fi';
 
-const extractArtists = (songsList = []) => {
-  const artistMap = new Map();
-  songsList.forEach((item) => {
-    if (!item) return;
-    const artistName = (item.artist || item.artist_name || '').trim();
-    if (artistName && artistName !== 'Various Artists' && artistName !== 'Unknown Artist') {
-      const artKey = artistName.toLowerCase();
-      const cover = item.cover || item.cover_url || item.image_url || item.image;
-      if (!artistMap.has(artKey)) {
-        artistMap.set(artKey, {
-          id: `art_${artKey.replace(/[^a-z0-9]/g, '_')}`,
-          name: artistName,
-          artist_name: artistName,
-          imageUrl: cover || '',
-          image_url: cover || '',
-          cover_url: cover || '',
-          image: cover || '',
-          type: 'Artist',
-        });
-      }
-    }
-  });
-  return Array.from(artistMap.values());
-};
-
-const extractAlbums = (songsList = []) => {
-  const albumMap = new Map();
-  songsList.forEach((item) => {
-    if (!item) return;
-    const albumName = (item.album || item.album_name || 'Official Single').trim();
-    const artistName = (item.artist || item.artist_name || 'YouTube Artist').trim();
-    const albKey = `${albumName}_${artistName}`.toLowerCase();
-    const cover = item.cover || item.cover_url || item.image_url || item.image;
-    if (!albumMap.has(albKey)) {
-      albumMap.set(albKey, {
-        id: `alb_${albKey.replace(/[^a-z0-9]/g, '_')}`,
-        name: albumName,
-        title: albumName,
-        artist_name: artistName,
-        artist: artistName,
-        cover_url: cover || '',
-        image_url: cover || '',
-        cover: cover || '',
-        image: cover || '',
-      });
-    }
-  });
-  return Array.from(albumMap.values());
-};
-
-const Search = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialQuery = searchParams.get('q') || '';
-  const [query, setQuery] = useState(initialQuery);
-  const [activeTab, setActiveTab] = useState(0); // 0: Songs, 1: Artists, 2: Albums, 3: Playlists
+export default function Search() {
+  const [searchQuery, setSearchQuery] = useState('');
   const [songs, setSongs] = useState([]);
-  const [artists, setArtists] = useState([]);
-  const [albums, setAlbums] = useState([]);
-  const [playlists, setPlaylists] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const searchReqId = useRef(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const { currentTrack, isPlaying, playTrack, setIsPlaying } = useMusic() || {};
 
-  useEffect(() => {
-    const q = searchParams.get('q');
-    if (q) {
-      setQuery(q);
-      performSearch(q);
-    } else if (query.trim()) {
-      performSearch(query);
-    }
-  }, [searchParams]);
+  const handleSearch = async (e) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim()) return;
 
-  // Debounced live typing search (500ms optimal typing balance)
-  useEffect(() => {
-    if (!query.trim()) return;
-    const timer = setTimeout(() => {
-      setSearchParams({ q: query.trim() }, { replace: true });
-      performSearch(query.trim());
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  const performSearch = async (searchTerm) => {
-    const term = searchTerm?.trim();
-    if (!term) {
-      setSongs([]);
-      setArtists([]);
-      setAlbums([]);
-      setPlaylists([]);
-      setLoading(false);
-      return;
-    }
-
-    const currentReq = ++searchReqId.current;
-    setLoading(true);
-
+    setIsLoading(true);
     try {
-      const [tracksRes, playlistsRes] = await Promise.all([
-        searchYouTubeTracks(term).catch(() => []),
-        searchYouTubePlaylists(term).catch(() => []),
-      ]);
-
-      let results = tracksRes || [];
-      if (results.length === 0) {
-        try {
-          results = await searchYouTubeMusic(term);
-        } catch (apiErr) {
-          console.error('API search error:', apiErr);
-        }
-      }
-
-      if (currentReq === searchReqId.current) {
-        const safeResults = Array.isArray(results) ? results : [];
-        setSongs(safeResults);
-        setArtists(extractArtists(safeResults));
-        setAlbums(extractAlbums(safeResults));
-        setPlaylists(Array.isArray(playlistsRes) ? playlistsRes : []);
-      }
+      const results = await searchYouTubeMusic(searchQuery.trim());
+      setSongs(Array.isArray(results) ? results : []);
     } catch (err) {
-      console.error('Search execution error:', err);
-      if (currentReq === searchReqId.current) {
-        setSongs([]);
-        setArtists([]);
-        setAlbums([]);
-        setPlaylists([]);
-      }
+      console.error('Search error:', err);
+      setSongs([]);
     } finally {
-      if (currentReq === searchReqId.current) {
-        setLoading(false);
-      }
+      setIsLoading(false);
     }
   };
 
-  const handleQuerySubmit = (e) => {
-    e.preventDefault();
-    if (query.trim()) {
-      setSearchParams({ q: query.trim() });
-      performSearch(query.trim());
+  const handlePlayClick = (track) => {
+    if (currentTrack?.id === track.id || (currentTrack?.youtubeId && currentTrack?.youtubeId === track.id)) {
+      if (setIsPlaying) setIsPlaying(!isPlaying);
+    } else {
+      if (playTrack) playTrack(track);
     }
   };
+
+  const songList = Array.isArray(songs) ? songs : [];
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* Search Header */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography variant="h4" sx={{ fontWeight: 800, fontFamily: 'var(--font-heading)' }}>
-          Search & Discover
-        </Typography>
+    <div className="p-8 text-white max-w-7xl mx-auto space-y-6">
+      <h1 className="text-3xl font-extrabold tracking-tight">Search & Discover</h1>
 
-        <form onSubmit={handleQuerySubmit}>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <TextField
-              fullWidth
-              placeholder="Search songs, artists, albums, or playlists..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              InputProps={{
-                startAdornment: <SearchIcon sx={{ color: 'var(--text-muted)', mr: 1.5 }} />,
-              }}
-              sx={{
-                backgroundColor: 'var(--bg-surface)',
-                borderRadius: 'var(--radius-md)',
-                '& .MuiOutlinedInput-root': {
-                  color: 'var(--text-primary)',
-                  '& fieldset': { borderColor: 'var(--border-color)' },
-                  '&:hover fieldset': { borderColor: 'var(--accent-primary)' },
-                },
-              }}
-            />
-            <Button
-              type="submit"
-              variant="contained"
-              onClick={() => {
-                if (query.trim()) performSearch(query.trim());
-              }}
-              sx={{ backgroundColor: 'var(--accent-primary)', fontWeight: 700, px: 3 }}
-            >
-              Search
-            </Button>
-          </Box>
-        </form>
-      </Box>
+      {/* Search Input Bar */}
+      <form onSubmit={handleSearch} className="flex gap-3 max-w-4xl">
+        <div className="relative flex-1">
+          <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search songs, artists (e.g. Twice, Taylor Swift)..."
+            className="w-full pl-12 pr-4 py-3 bg-[#181824] border border-[#2a2b3d] rounded-xl text-white outline-none focus:border-purple-500 transition"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="px-8 py-3 bg-purple-600 hover:bg-purple-700 font-bold rounded-xl uppercase text-sm tracking-wide transition disabled:opacity-50 cursor-pointer"
+        >
+          {isLoading ? 'Searching...' : 'SEARCH'}
+        </button>
+      </form>
 
-      {/* Result Tabs */}
-      <Tabs
-        value={activeTab}
-        onChange={(_, val) => setActiveTab(val)}
-        textColor="inherit"
-        variant="scrollable"
-        scrollButtons="auto"
-        allowScrollButtonsMobile
-        sx={{
-          borderBottom: '1px solid var(--border-color)',
-          '& .MuiTabs-indicator': { backgroundColor: 'var(--accent-primary)', height: 3 },
-        }}
-      >
-        <Tab label={`Songs (${(Array.isArray(songs) ? songs : []).length})`} sx={{ fontWeight: 700 }} />
-        <Tab label={`Artists (${(Array.isArray(artists) ? artists : []).length})`} sx={{ fontWeight: 700 }} />
-        <Tab label={`Albums (${(Array.isArray(albums) ? albums : []).length})`} sx={{ fontWeight: 700 }} />
-        <Tab label={`Playlists (${(Array.isArray(playlists) ? playlists : []).length})`} sx={{ fontWeight: 700 }} />
-      </Tabs>
+      {/* Tabs */}
+      <div className="flex items-center gap-8 border-b border-gray-800 text-sm font-semibold pt-2">
+        <span className="text-purple-400 border-b-2 border-purple-500 pb-3 cursor-pointer">
+          SONGS ({songList.length})
+        </span>
+      </div>
 
-      {loading ? (
-        <LoadingSpinner message="Searching YouTube music catalog..." />
+      {/* Content Display */}
+      {isLoading ? (
+        <div className="py-16 text-center text-gray-400">Searching YouTube for "{searchQuery}"...</div>
+      ) : songList.length === 0 ? (
+        <div className="py-16 text-center text-gray-500">No tracks available. Type a keyword and click Search.</div>
       ) : (
-        <Box sx={{ mt: 1 }}>
-          {activeTab === 0 && <TrackList tracks={Array.isArray(songs) ? songs : []} />}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="text-gray-400 text-xs uppercase border-b border-gray-800/80">
+                <th className="py-3 px-4 w-12">#</th>
+                <th className="py-3 px-4">TITLE</th>
+                <th className="py-3 px-4 hidden md:table-cell">ALBUM / CHANNEL</th>
+                <th className="py-3 px-4 text-right">DURATION</th>
+                <th className="py-3 px-4 w-12"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-800/40 text-sm">
+              {songList.map((track, index) => {
+                const isCurrent =
+                  currentTrack?.id === track.id ||
+                  (currentTrack?.youtubeId && currentTrack?.youtubeId === track.id) ||
+                  (currentTrack?.id && track.youtubeId && currentTrack.id === track.youtubeId);
 
-          {activeTab === 1 && (
-            <Grid container spacing={2.5}>
-              {(Array.isArray(artists) ? artists : []).map((artist) => (
-                <Grid item xs={6} sm={4} md={3} lg={2} key={artist.id}>
-                  <ArtistCard artist={artist} />
-                </Grid>
-              ))}
-            </Grid>
-          )}
+                return (
+                  <tr
+                    key={track.id || index}
+                    onClick={() => handlePlayClick(track)}
+                    className={`group hover:bg-[#181824]/80 transition cursor-pointer ${
+                      isCurrent ? 'bg-[#181824] text-purple-400' : ''
+                    }`}
+                  >
+                    <td className="py-3 px-4 text-gray-400 group-hover:text-white">
+                      {isCurrent && isPlaying ? (
+                        <FiPause className="text-purple-400" />
+                      ) : (
+                        <span className="group-hover:hidden">{index + 1}</span>
+                      )}
+                      <FiPlay className="hidden group-hover:inline text-purple-400" />
+                    </td>
 
-          {activeTab === 2 && (
-            <Grid container spacing={2.5}>
-              {(Array.isArray(albums) ? albums : []).map((album) => (
-                <Grid item xs={6} sm={4} md={3} lg={2} key={album.id}>
-                  <AlbumCard album={album} />
-                </Grid>
-              ))}
-            </Grid>
-          )}
+                    <td className="py-3 px-4 flex items-center gap-3">
+                      <img
+                        src={track.thumbnail || track.image_url || track.cover_url || 'https://via.placeholder.com/40'}
+                        alt={track.title}
+                        className="w-10 h-10 rounded-lg object-cover bg-black/40"
+                      />
+                      <div className="overflow-hidden max-w-md">
+                        <p className={`font-semibold truncate ${isCurrent ? 'text-purple-400' : 'text-white'}`}>
+                          {track.title}
+                        </p>
+                        <p className="text-xs text-gray-400 truncate">{track.artist || track.artist_name}</p>
+                      </div>
+                    </td>
 
-          {activeTab === 3 && (
-            <Grid container spacing={2.5}>
-              {(Array.isArray(playlists) ? playlists : []).map((playlist) => (
-                <Grid item xs={6} sm={4} md={3} lg={2} key={playlist.id}>
-                  <PlaylistCard playlist={playlist} />
-                </Grid>
-              ))}
-            </Grid>
-          )}
-        </Box>
+                    <td className="py-3 px-4 text-gray-400 hidden md:table-cell truncate max-w-xs">
+                      {track.album || track.artist || 'YouTube Music'}
+                    </td>
+
+                    <td className="py-3 px-4 text-gray-400 text-right font-mono text-xs">
+                      {track.duration || '3:30'}
+                    </td>
+
+                    <td className="py-3 px-4 text-gray-400 text-right">
+                      <button
+                        type="button"
+                        onClick={(e) => e.stopPropagation()}
+                        className="hover:text-white p-1 cursor-pointer"
+                      >
+                        <FiMoreVertical size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
-
-    </Box>
+    </div>
   );
-};
-
-export default Search;
-
+}
