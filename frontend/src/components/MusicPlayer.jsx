@@ -37,6 +37,11 @@ export default function MusicPlayer() {
       setDuration(currentTrack.durationRaw);
     } else if (typeof currentTrack?.duration === 'number') {
       setDuration(currentTrack.duration);
+    } else if (typeof currentTrack?.duration === 'string' && currentTrack.duration.includes(':')) {
+      const parts = currentTrack.duration.split(':');
+      const mins = parseInt(parts[0] || '0', 10);
+      const secs = parseInt(parts[1] || '0', 10);
+      setDuration(mins * 60 + secs || 210);
     }
   }, [currentTrack]);
 
