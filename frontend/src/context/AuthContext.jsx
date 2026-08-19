@@ -68,8 +68,8 @@ export const AuthProvider = ({ children }) => {
             exists = userSnap.exists() || registered.some((u) => u.email?.toLowerCase() === firebaseUser.email.toLowerCase());
           }
 
-          if (!exists) {
-            // Account was deleted or not registered: Force Firebase SignOut & Clear State
+          if (!exists || (window.location.pathname === '/register' && exists)) {
+            // Account was deleted, not registered, or user is on /register with an existing email
             await signOut(authInstance).catch(() => {});
             localStorage.removeItem('access_token');
             localStorage.removeItem('token');

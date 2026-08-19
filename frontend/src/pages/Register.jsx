@@ -241,13 +241,20 @@ const Register = () => {
         alreadyExists = userSnap.exists() || registered.some((u) => u.email?.toLowerCase().trim() === email);
       }
 
-      // 2. If already registered, reject registration and prompt user to login
+      // 2. If already registered, reject registration and immediately redirect to /login
       if (alreadyExists) {
+        // 1. Force Firebase to immediately sign out to stop AuthContext state change
         await signOut(authInstance).catch(() => {});
-        setLoading(false);
-        const errMsg = 'This email is already registered. Please Sign In instead.';
-        setError(errMsg);
+
+        // 2. Clear any lingering credentials
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        if (setUser) setUser(null);
+        if (setIsAuthenticated) setIsAuthenticated(false);
+
+        // 3. Show alert and immediately force redirect to login page
         alert('This email is already registered. Please sign in instead.');
+        window.location.replace('/login');
         return;
       }
 
