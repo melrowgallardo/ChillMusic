@@ -111,12 +111,26 @@ const Search = () => {
         searchYouTubePlaylists(term).catch(() => []),
       ]);
 
+      let results = tracksRes || [];
+      if (results.length === 0) {
+        try {
+          const apiUrl = import.meta.env.VITE_API_URL || '';
+          const res = await fetch(`${apiUrl}/api/search?q=${encodeURIComponent(term)}`);
+          if (res.ok) {
+            const data = await res.json();
+            results = Array.isArray(data) ? data : (data.results || data.tracks || data.items || []);
+          }
+        } catch (apiErr) {
+          console.error('API search error:', apiErr);
+        }
+      }
+
       if (currentReq === searchReqId.current) {
-        const results = tracksRes || [];
-        setSongs(results);
-        setArtists(extractArtists(results));
-        setAlbums(extractAlbums(results));
-        setPlaylists(playlistsRes || []);
+        const safeResults = Array.isArray(results) ? results : [];
+        setSongs(safeResults);
+        setArtists(extractArtists(safeResults));
+        setAlbums(extractAlbums(safeResults));
+        setPlaylists(Array.isArray(playlistsRes) ? playlistsRes : []);
       }
     } catch (err) {
       console.error('Search execution error:', err);

@@ -113,19 +113,32 @@ const Home = () => {
         ]);
 
         if (isMounted) {
-          const hits = hitsRes.length > 0 ? hitsRes : [];
+          let hits = hitsRes.length > 0 ? hitsRes : [];
+          if (hits.length === 0) {
+            try {
+              const apiUrl = import.meta.env.VITE_API_URL || '';
+              const res = await fetch(`${apiUrl}/api/tracks`);
+              if (res.ok) {
+                const data = await res.json();
+                hits = Array.isArray(data) ? data : (data.tracks || data.items || []);
+              }
+            } catch (apiErr) {
+              console.error('Failed to load home tracks from API:', apiErr);
+            }
+          }
+
           const trending = hits.length > 0 ? [...hits].reverse() : [];
           const newRel = newRelRes.length > 0 ? newRelRes : [];
           const chill = chillRes.length > 0 ? chillRes : [];
           const playlists = playlistsRes.length > 0 ? playlistsRes : [];
 
-          setHitsTracks(hits);
-          setTrendingTracks(trending);
-          setNewReleaseTracks(newRel);
-          setChillTracks(chill);
-          setFeaturedPlaylists(playlists);
+          setHitsTracks(Array.isArray(hits) ? hits : []);
+          setTrendingTracks(Array.isArray(trending) ? trending : []);
+          setNewReleaseTracks(Array.isArray(newRel) ? newRel : []);
+          setChillTracks(Array.isArray(chill) ? chill : []);
+          setFeaturedPlaylists(Array.isArray(playlists) ? playlists : []);
           if (artistsRes && artistsRes.length > 0) {
-            setArtists(artistsRes);
+            setArtists(Array.isArray(artistsRes) ? artistsRes : []);
           }
 
           try {

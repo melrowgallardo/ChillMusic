@@ -47,6 +47,33 @@ app.include_router(youtube.router)
 app.include_router(deezer.router)
 app.include_router(lyrics.router)
 
+from app.services.jamendo_service import JamendoService
+from app.services.youtube_service import YouTubeService
+
+@app.get("/api/tracks")
+async def get_tracks(limit: int = 20):
+    try:
+        tracks = await YouTubeService.get_trending_music(limit=limit)
+        if not tracks:
+            tracks = await JamendoService.get_trending_tracks(limit=limit)
+        return tracks or []
+    except Exception as e:
+        logger.warn(f"Error fetching /api/tracks: {e}")
+        return []
+
+@app.get("/api/search")
+async def search_tracks(q: str = ""):
+    if not q.strip():
+        return []
+    try:
+        results = await YouTubeService.search_videos(query=q, limit=20)
+        if not results:
+            results = await JamendoService.search_tracks(query=q, limit=20)
+        return results or []
+    except Exception as e:
+        logger.warn(f"Error fetching /api/search: {e}")
+        return []
+
 @app.delete("/api/users/me")
 def delete_users_me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     db.delete(current_user)
