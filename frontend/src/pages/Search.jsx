@@ -3,100 +3,110 @@ import { useMusic } from '../context/MusicContext';
 import { FiSearch, FiPlay, FiPause, FiMoreVertical } from 'react-icons/fi';
 
 export default function Search() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('Twice');
   const [songs, setSongs] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { currentTrack, isPlaying, playTrack, setIsPlaying } = useMusic() || {};
+  const { currentTrack, isPlaying, playTrack, setIsPlaying } = useMusic();
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
 
     setIsLoading(true);
-    try {
-      const apiKey =
-        import.meta.env.VITE_YOUTUBE_API_KEY ||
-        import.meta.env.YOUTUBE_API_KEY ||
-        'AIzaSyAVW_86xvVRgRWu25NFhyiPGBSpuHx_BvA';
+    let results = [];
 
-      // 1. YouTube API Call
-      let fetchedTracks = [];
-      if (apiKey) {
-        try {
-          const res = await fetch(
-            `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(
-              searchQuery.trim() + ' music'
-            )}&type=video&videoCategoryId=10&key=${apiKey}`
+    // Strategy 1: YouTube Data API v3 (if Key is present)
+    const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
+    if (apiKey) {
+      try {
+        const res = await fetch(
+          `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(
+            searchQuery.trim()
+          )}&type=video&key=${apiKey}`
+        );
+        const data = await res.json();
+        if (data.items && data.items.length > 0) {
+          const videoIds = data.items.map((i) => i.id.videoId).filter(Boolean).join(',');
+
+          // Fetch content details for accurate durations
+          const detailsRes = await fetch(
+            `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoIds}&key=${apiKey}`
           );
-          const data = await res.json();
-          if (data.items && data.items.length > 0) {
-            const videoIds = data.items.map((i) => i.id?.videoId || i.id).filter(Boolean).join(',');
-            const detailRes = await fetch(
-              `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoIds}&key=${apiKey}`
-            );
-            const detailData = await detailRes.json();
+          const detailsData = await detailsRes.json();
 
-            fetchedTracks = (detailData.items || []).map((item) => {
-              const match = (item.contentDetails?.duration || '').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-              const mins = parseInt(match?.[2] || 0, 10);
-              const secs = parseInt(match?.[3] || 0, 10);
-              return {
-                id: item.id,
-                youtubeId: item.id,
-                title: item.snippet?.title?.replace(/(\(Official.*|\(Lyrics.*|\[Official.*|\[Lyrics.*)/gi, '').trim() || searchQuery,
-                artist: item.snippet?.channelTitle || 'Artist',
-                artist_name: item.snippet?.channelTitle || 'Artist',
-                album: item.snippet?.channelTitle || 'Single',
-                album_name: item.snippet?.channelTitle || 'Single',
-                thumbnail: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
-                image_url: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
-                cover_url: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
-                duration: `${mins}:${secs.toString().padStart(2, '0')}`,
-                durationRaw: mins * 60 + secs || 210,
-              };
-            });
-          }
-        } catch (ytErr) {
-          console.warn('YouTube API error:', ytErr);
+          results = (detailsData.items || data.items).map((item) => {
+            const dur = item.contentDetails?.duration || '';
+            const match = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+            const mins = parseInt(match?.[2] || 0, 10);
+            const secs = parseInt(match?.[3] || 0, 10);
+            const formattedDur = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+            return {
+              id: item.id?.videoId || item.id,
+              youtubeId: item.id?.videoId || item.id,
+              title: item.snippet?.title?.replace(/(&quot;|&#39;|&amp;)/g, '').trim(),
+              artist: item.snippet?.channelTitle || 'Artist',
+              album: item.snippet?.channelTitle || 'Single',
+              thumbnail:
+                item.snippet?.thumbnails?.medium?.url ||
+                item.snippet?.thumbnails?.high?.url ||
+                `https://i.ytimg.com/vi/${item.id?.videoId || item.id}/hqdefault.jpg`,
+              duration: formattedDur !== '0:00' ? formattedDur : '3:30',
+              durationRaw: mins * 60 + secs || 210,
+            };
+          });
         }
+      } catch (err) {
+        console.warn('YouTube API call failed, falling back to public mirrors:', err);
       }
-
-      // 2. High Quality Music Fallback if API key has quota limits or no items
-      if (fetchedTracks.length === 0) {
-        try {
-          const { searchYouTubeMusic } = await import('../services/youtubeService');
-          fetchedTracks = await searchYouTubeMusic(searchQuery.trim());
-        } catch (fallbackErr) {
-          console.warn('Fallback search error:', fallbackErr);
-        }
-      }
-
-      setSongs(fetchedTracks || []);
-    } catch (err) {
-      console.error('Search failure:', err);
-      setSongs([]);
-    } finally {
-      setIsLoading(false);
     }
+
+    // Strategy 2: High Reliability Public Music Metadata Mirror (Always works)
+    if (results.length === 0) {
+      try {
+        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=song&limit=25`);
+        const data = await res.json();
+        if (data.results && data.results.length > 0) {
+          results = data.results.map((track) => {
+            const totalSeconds = Math.floor(track.trackTimeMillis / 1000);
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = totalSeconds % 60;
+            return {
+              id: track.trackId.toString(),
+              youtubeId: track.trackId.toString(),
+              title: track.trackName,
+              artist: track.artistName,
+              album: track.collectionName || 'Single',
+              thumbnail: track.artworkUrl100?.replace('100x100bb', '400x400bb'),
+              duration: `${mins}:${secs.toString().padStart(2, '0')}`,
+              durationRaw: totalSeconds,
+            };
+          });
+        }
+      } catch (err) {
+        console.error('All search strategies failed:', err);
+      }
+    }
+
+    setSongs(results);
+    setIsLoading(false);
   };
 
   const handleRowClick = (track) => {
-    if (currentTrack?.id === track.id || (currentTrack?.youtubeId && currentTrack?.youtubeId === track.id)) {
-      if (setIsPlaying) setIsPlaying(!isPlaying);
+    if (currentTrack?.id === track.id) {
+      setIsPlaying(!isPlaying);
     } else {
-      if (playTrack) playTrack(track);
+      playTrack(track);
     }
   };
 
-  const songList = Array.isArray(songs) ? songs : [];
-
   return (
-    <div className="search-page-container" style={{ padding: '32px 40px', color: '#fff', maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ padding: '32px 40px', color: '#fff', maxWidth: '1400px', margin: '0 auto' }}>
       <h1 style={{ fontSize: '32px', fontWeight: '900', letterSpacing: '-0.02em', marginBottom: '28px', color: '#ffffff' }}>
         Search & Discover
       </h1>
 
-      {/* Original Full-Width Search Bar Layout */}
+      {/* Search Form */}
       <form onSubmit={handleSearch} style={{ display: 'flex', alignItems: 'stretch', gap: '14px', marginBottom: '32px', width: '100%' }}>
         <div style={{
           position: 'relative',
@@ -150,20 +160,20 @@ export default function Search() {
         </button>
       </form>
 
-      {/* Category Tabs */}
+      {/* Tabs */}
       <div style={{ display: 'flex', gap: '28px', borderBottom: '1px solid #1e202f', paddingBottom: '14px', marginBottom: '20px', fontSize: '13px', fontWeight: '800', letterSpacing: '0.05em' }}>
         <span style={{ color: '#a855f7', borderBottom: '2px solid #a855f7', paddingBottom: '14px', cursor: 'pointer' }}>
-          SONGS ({songList.length})
+          SONGS ({songs.length})
         </span>
         <span style={{ color: '#64748b', cursor: 'pointer' }}>ARTISTS (0)</span>
         <span style={{ color: '#64748b', cursor: 'pointer' }}>ALBUMS (0)</span>
         <span style={{ color: '#64748b', cursor: 'pointer' }}>PLAYLISTS (0)</span>
       </div>
 
-      {/* Table or Empty State */}
+      {/* Table */}
       {isLoading ? (
         <div style={{ padding: '80px 0', textAlign: 'center', color: '#94a3b8' }}>Loading tracks...</div>
-      ) : songList.length === 0 ? (
+      ) : songs.length === 0 ? (
         <div style={{ padding: '80px 0', textAlign: 'center', color: '#64748b', fontSize: '15px' }}>
           No tracks available. Type a keyword and click Search.
         </div>
@@ -180,12 +190,8 @@ export default function Search() {
               </tr>
             </thead>
             <tbody>
-              {songList.map((track, idx) => {
-                const isCurrent =
-                  currentTrack?.id === track.id ||
-                  (currentTrack?.youtubeId && currentTrack?.youtubeId === track.id) ||
-                  (currentTrack?.id && track.youtubeId && currentTrack.id === track.youtubeId);
-
+              {songs.map((track, idx) => {
+                const isCurrent = currentTrack?.id === track.id;
                 return (
                   <tr
                     key={track.id || idx}
@@ -200,14 +206,14 @@ export default function Search() {
                       {isCurrent && isPlaying ? <FiPause style={{ color: '#a855f7' }} /> : idx + 1}
                     </td>
                     <td style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                      <img src={track.thumbnail || track.image_url || track.cover_url} alt={track.title} style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover' }} />
+                      <img src={track.thumbnail} alt={track.title} style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover' }} />
                       <div>
                         <p style={{ margin: 0, fontWeight: '700', fontSize: '15px', color: isCurrent ? '#a855f7' : '#ffffff' }}>{track.title}</p>
-                        <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>{track.artist || track.artist_name}</p>
+                        <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>{track.artist}</p>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '14px' }}>{track.album || track.artist || 'Single'}</td>
-                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '13px', textAlign: 'right', fontFamily: 'monospace' }}>{track.duration || '3:30'}</td>
+                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '14px' }}>{track.album}</td>
+                    <td style={{ padding: '14px 16px', color: '#94a3b8', fontSize: '13px', textAlign: 'right', fontFamily: 'monospace' }}>{track.duration}</td>
                     <td style={{ padding: '14px 16px', textAlign: 'right', color: '#64748b' }}>
                       <FiMoreVertical size={16} />
                     </td>
