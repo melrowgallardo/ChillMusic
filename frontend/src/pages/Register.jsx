@@ -222,7 +222,7 @@ const Register = () => {
       const userDocRef = doc(db, 'users', googleUser.uid);
       const userSnap = await getDoc(userDocRef);
 
-      // 1. Check if email is already registered
+      // 1. Check if email is already in the database
       if (apiUrl) {
         try {
           const res = await fetch(`${apiUrl}/api/auth/check-email?email=${encodeURIComponent(email)}`);
@@ -232,8 +232,8 @@ const Register = () => {
           } else {
             alreadyExists = userSnap.exists();
           }
-        } catch (err) {
-          console.warn('Backend check bypassed:', err);
+        } catch (e) {
+          console.warn('Backend check bypassed:', e);
           alreadyExists = userSnap.exists();
         }
       } else {
@@ -241,24 +241,19 @@ const Register = () => {
         alreadyExists = userSnap.exists() || registered.some((u) => u.email?.toLowerCase().trim() === email);
       }
 
-      // 2. If already registered, reject registration and immediately redirect to /login
+      // 2. If already registered: Kick out to /login
       if (alreadyExists) {
-        // 1. Force Firebase to immediately sign out to stop AuthContext state change
         await signOut(authInstance).catch(() => {});
-
-        // 2. Clear any lingering credentials
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
-        if (setUser) setUser(null);
-        if (setIsAuthenticated) setIsAuthenticated(false);
-
-        // 3. Show alert and immediately force redirect to login page
+        if (typeof setUser === 'function') setUser(null);
+        if (typeof setIsAuthenticated === 'function') setIsAuthenticated(false);
         alert('This email is already registered. Please sign in instead.');
         window.location.replace('/login');
         return;
       }
 
-      // 3. If new, register the user into backend or local store
+      // 3. If new/not in database: Register and save account
       const newUser = {
         id: googleUser.uid,
         uid: googleUser.uid,
@@ -278,29 +273,37 @@ const Register = () => {
         }).catch((e) => console.warn(e));
       }
 
-      const idToken = await googleUser.getIdToken();
       if (apiUrl) {
-        await fetch(`${apiUrl}/api/auth/google-register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            credential: idToken,
-            email: email,
-            name: newUser.username,
-            picture: googleUser.photoURL || '',
-          }),
-        }).catch((err) => console.warn('Backend save bypassed:', err));
+        try {
+          const token = await googleUser.getIdToken();
+          await fetch(`${apiUrl}/api/auth/google-register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              credential: token,
+              email: email,
+              name: newUser.username,
+              picture: googleUser.photoURL || '',
+            }),
+          }).catch((e) => console.warn('Backend register failed, using client session:', e));
+        } catch (e) {
+          console.warn('Backend register failed, using client session:', e);
+        }
       } else {
         const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
         registered.push(newUser);
         localStorage.setItem('registered_users', JSON.stringify(registered));
       }
 
-      // 4. Save session and redirect straight to home dashboard
+      // 4. Save session tokens and navigate to Dashboard
+      const token = await googleUser.getIdToken();
+      localStorage.setItem('access_token', token);
       localStorage.setItem('user', JSON.stringify(newUser));
-      localStorage.setItem('access_token', idToken);
-      if (setUser) setUser(newUser);
-      if (setIsAuthenticated) setIsAuthenticated(true);
+
+      if (typeof setUser === 'function') setUser(newUser);
+      if (typeof setIsAuthenticated === 'function') setIsAuthenticated(true);
+
+      // Hard redirect to Home Dashboard
       window.location.replace('/');
     } catch (err) {
       console.error('Google Sign-Up Error:', err);
