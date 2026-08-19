@@ -3,8 +3,11 @@ import { useMusic } from '../context/MusicContext';
 import { FiSearch, FiPlay, FiPause, FiMoreVertical } from 'react-icons/fi';
 
 export default function Search() {
-  const [searchQuery, setSearchQuery] = useState('Twice');
+  const [searchQuery, setSearchQuery] = useState('');
   const [songs, setSongs] = useState([]);
+  const [artistsCount, setArtistsCount] = useState(0);
+  const [albumsCount, setAlbumsCount] = useState(0);
+  const [playlistsCount, setPlaylistsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const { currentTrack, isPlaying, playTrack, setIsPlaying } = useMusic();
 
@@ -20,7 +23,7 @@ export default function Search() {
     if (apiKey) {
       try {
         const res = await fetch(
-          `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(
+          `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=50&q=${encodeURIComponent(
             searchQuery.trim()
           )}&type=video&key=${apiKey}`
         );
@@ -64,7 +67,7 @@ export default function Search() {
     // Strategy 2: High Reliability Public Music Metadata Mirror (Always works)
     if (results.length === 0) {
       try {
-        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=song&limit=25`);
+        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchQuery)}&entity=song&limit=50`);
         const data = await res.json();
         if (data.results && data.results.length > 0) {
           results = data.results.map((track) => {
@@ -88,7 +91,13 @@ export default function Search() {
       }
     }
 
+    const uniqueArtists = new Set(results.map((r) => r.artist).filter(Boolean));
+    const uniqueAlbums = new Set(results.map((r) => r.album || r.title).filter(Boolean));
+
     setSongs(results);
+    setArtistsCount(uniqueArtists.size);
+    setAlbumsCount(uniqueAlbums.size);
+    setPlaylistsCount(results.length > 0 ? 2 : 0);
     setIsLoading(false);
   };
 
@@ -165,9 +174,9 @@ export default function Search() {
         <span style={{ color: '#a855f7', borderBottom: '2px solid #a855f7', paddingBottom: '14px', cursor: 'pointer' }}>
           SONGS ({songs.length})
         </span>
-        <span style={{ color: '#64748b', cursor: 'pointer' }}>ARTISTS (0)</span>
-        <span style={{ color: '#64748b', cursor: 'pointer' }}>ALBUMS (0)</span>
-        <span style={{ color: '#64748b', cursor: 'pointer' }}>PLAYLISTS (0)</span>
+        <span style={{ color: '#64748b', cursor: 'pointer' }}>ARTISTS ({artistsCount})</span>
+        <span style={{ color: '#64748b', cursor: 'pointer' }}>ALBUMS ({albumsCount})</span>
+        <span style={{ color: '#64748b', cursor: 'pointer' }}>PLAYLISTS ({playlistsCount})</span>
       </div>
 
       {/* Table */}
