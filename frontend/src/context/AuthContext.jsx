@@ -13,9 +13,9 @@ import {
   getAuth,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
-import { getSafeStorageItem } from '../utils/storage';
+import { getSafeStorageItem, parseSafeJson } from '../utils/storage';
 
-export { getSafeStorageItem };
+export { getSafeStorageItem, parseSafeJson };
 
 export const getInitialUser = () => {
   try {
@@ -58,12 +58,8 @@ export const AuthProvider = ({ children }) => {
           if (apiUrl) {
             try {
               const res = await fetch(`${apiUrl}/api/auth/check-email?email=${encodeURIComponent(firebaseUser.email)}`);
-              if (res.ok) {
-                const data = await res.json();
-                exists = Boolean(data.exists) || userSnap.exists();
-              } else {
-                exists = userSnap.exists();
-              }
+              const data = await parseSafeJson(res);
+              exists = (res.ok && Boolean(data.exists)) || userSnap.exists();
             } catch (e) {
               exists = userSnap.exists();
             }

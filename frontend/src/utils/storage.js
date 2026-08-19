@@ -17,3 +17,13 @@ export const getSafeStorageItem = (key, fallback = null) => {
     return fallback;
   }
 };
+export const parseSafeJson = async (response) => {
+  try {
+    if (!response) return {};
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
+  } catch (e) {
+    console.warn('Failed to parse JSON response:', e);
+    return {};
+  }
+};

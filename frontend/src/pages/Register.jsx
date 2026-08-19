@@ -18,6 +18,7 @@ import {
   signInWithPopup,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { parseSafeJson } from '../utils/storage';
 import emailjs from '@emailjs/browser';
 
 const GoogleIcon = () => (
@@ -231,7 +232,7 @@ const Register = () => {
           }),
         });
 
-        const data = await res.json();
+        const data = await parseSafeJson(res);
         if (res.ok && data?.user) {
           localStorage.setItem('access_token', data.access_token);
           localStorage.setItem('user', JSON.stringify(data.user));

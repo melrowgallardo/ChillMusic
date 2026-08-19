@@ -24,6 +24,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { parseSafeJson } from '../utils/storage';
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" style={{ marginRight: 10 }}>
@@ -112,46 +113,63 @@ const Login = () => {
 
       const result = await signInWithPopup(auth, provider);
       const googleUser = result.user;
+      const email = googleUser.email;
       const idToken = await googleUser.getIdToken();
 
-      // Check Firestore & Backend user profile existence
+      // Check registration
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      let isRegistered = false;
+
       const userDocRef = doc(db, 'users', googleUser.uid);
       const userSnap = await getDoc(userDocRef);
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          credential: idToken,
-          email: googleUser.email,
-          name: googleUser.displayName,
-          picture: googleUser.photoURL || '',
-        }),
-      });
+      if (apiUrl) {
+        try {
+          const res = await fetch(`${apiUrl}/api/auth/check-email?email=${encodeURIComponent(email)}`);
+          const data = await parseSafeJson(res);
+          isRegistered = (res.ok && Boolean(data.exists)) || userSnap.exists();
+        } catch (err) {
+          console.warn('Backend verification error:', err);
+          isRegistered = userSnap.exists();
+        }
+      } else {
+        const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
+        isRegistered = userSnap.exists() || registered.some((u) => u.email?.toLowerCase() === email?.toLowerCase());
+      }
 
-      const data = await res.json();
-
-      if (!res.ok || !userSnap.exists() || !data?.user) {
-        // Sign out temporary auth session and block login
+      if (!isRegistered) {
         await signOut(auth).catch(() => {});
-        const errMsg = data?.detail || 'No account found with this Google email. Please Sign Up first.';
+        const errMsg = 'This email is not registered. Please sign up first.';
         setError(errMsg);
         setToast({ open: true, message: errMsg, severity: 'error' });
         setLoading(false);
         return;
       }
 
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      if (setUser) setUser(data.user);
-      if (setIsAuthenticated) setIsAuthenticated(true);
+      // Complete Login
+      const userProfile = {
+        id: googleUser.uid,
+        uid: googleUser.uid,
+        username: googleUser.displayName || email.split('@')[0],
+        email: email,
+        avatar: googleUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${email}`,
+        avatar_url: googleUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${email}`,
+        ...(userSnap.exists() ? userSnap.data() : {}),
+      };
 
-      setLoading(false);
+      localStorage.setItem('user', JSON.stringify(userProfile));
+      localStorage.setItem('access_token', idToken);
+      if (setUser) setUser(userProfile);
+      if (setIsAuthenticated) setIsAuthenticated(true);
       window.location.replace('/');
     } catch (err) {
       console.error('Google Login Error:', err);
-      if (err.code !== 'auth/popup-closed-by-user') {
-        const errMsg = err.message || 'No account found with this Google email. Please Sign Up first.';
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        setError('');
+      } else {
+        const errMsg = err.message?.includes('JSON')
+          ? 'This email is not registered. Please sign up first.'
+          : (err.message || 'Login failed.');
         setError(errMsg);
         setToast({ open: true, message: errMsg, severity: 'error' });
       }
