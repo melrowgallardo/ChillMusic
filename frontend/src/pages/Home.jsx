@@ -14,6 +14,7 @@ import {
   getPersonalizedQueriesForUser,
 } from '../services/youtubeApi';
 import { searchArtists } from '../services/jamendo';
+import { getTrendingTracks } from '../services/youtubeService';
 import TrackCard from '../components/Track/TrackCard';
 import PlaylistCard from '../components/Playlist/PlaylistCard';
 import ArtistCard from '../components/Artist/ArtistCard';
@@ -116,19 +117,7 @@ const Home = () => {
           let hits = hitsRes.length > 0 ? hitsRes : [];
           if (hits.length === 0) {
             try {
-              const apiUrl = import.meta.env.VITE_API_URL || '';
-              const res = await fetch(`${apiUrl}/api/music/trending`);
-              if (res.ok) {
-                const data = await res.json();
-                hits = Array.isArray(data) ? data : (data.tracks || data.items || []);
-              }
-              if (hits.length === 0) {
-                const resTracks = await fetch(`${apiUrl}/api/tracks`);
-                if (resTracks.ok) {
-                  const dataT = await resTracks.json();
-                  hits = Array.isArray(dataT) ? dataT : (dataT.tracks || dataT.items || []);
-                }
-              }
+              hits = await getTrendingTracks();
             } catch (apiErr) {
               console.error('Failed to load trending music from API:', apiErr);
             }

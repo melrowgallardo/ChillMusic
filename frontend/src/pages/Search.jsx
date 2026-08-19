@@ -3,6 +3,7 @@ import { Box, Typography, TextField, Tabs, Tab, Grid, Button } from '@mui/materi
 import SearchIcon from '@mui/icons-material/Search';
 import { useSearchParams } from 'react-router-dom';
 import { searchYouTubeTracks, searchYouTubePlaylists } from '../services/youtubeApi';
+import { searchYouTubeMusic } from '../services/youtubeService';
 import TrackList from '../components/Track/TrackList';
 import ArtistCard from '../components/Artist/ArtistCard';
 import AlbumCard from '../components/Album/AlbumCard';
@@ -114,19 +115,7 @@ const Search = () => {
       let results = tracksRes || [];
       if (results.length === 0) {
         try {
-          const apiUrl = import.meta.env.VITE_API_URL || '';
-          const res = await fetch(`${apiUrl}/api/music/search?q=${encodeURIComponent(term)}`);
-          if (res.ok) {
-            const data = await res.json();
-            results = Array.isArray(data) ? data : (data.songs || data.tracks || data.results || []);
-          }
-          if (results.length === 0) {
-            const resFallback = await fetch(`${apiUrl}/api/search?q=${encodeURIComponent(term)}`);
-            if (resFallback.ok) {
-              const dataF = await resFallback.json();
-              results = Array.isArray(dataF) ? dataF : (dataF.results || dataF.tracks || dataF.items || []);
-            }
-          }
+          results = await searchYouTubeMusic(term);
         } catch (apiErr) {
           console.error('API search error:', apiErr);
         }
