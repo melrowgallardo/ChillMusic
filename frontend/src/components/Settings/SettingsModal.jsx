@@ -24,6 +24,7 @@ import LockResetIcon from '@mui/icons-material/LockReset';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import PersonIcon from '@mui/icons-material/Person';
+import SecurityIcon from '@mui/icons-material/Security';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
@@ -151,34 +152,29 @@ const SettingsModal = ({ open, onClose, user: propUser, updateUserProfile, chang
     }
   };
 
-  const handlePermanentDelete = async (e) => {
-    if (e) e.preventDefault();
+  const handleConfirmDeleteAccount = async () => {
     setIsDeleting(true);
     try {
-      if (typeof deleteAccount === 'function') {
-        await deleteAccount();
-      } else {
-        // Immediate hard fallback wipe
-        const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-        const apiUrl = import.meta.env.VITE_API_URL || '';
-        if (token && apiUrl) {
-          await fetch(`${apiUrl}/api/auth/delete-account`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          }).catch((err) => console.warn('API wipe error:', err));
-        }
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+
+      if (token && apiUrl) {
+        await fetch(`${apiUrl}/api/auth/delete-account`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
       }
     } catch (err) {
-      console.error('Permanent delete error:', err);
+      console.error('Delete account API error:', err);
     } finally {
-      // Hard wipe all storage keys
+      // 1. Purge all local user credentials & cached data
       localStorage.clear();
       sessionStorage.clear();
-      // Force browser navigation to login page
-      window.location.href = '/login';
+      // 2. Hard redirect to login screen
+      window.location.replace('/login');
     }
   };
 
@@ -439,25 +435,10 @@ const SettingsModal = ({ open, onClose, user: propUser, updateUserProfile, chang
           </Button>
           <button
             type="button"
-            onClick={handlePermanentDelete}
-            disabled={isDeleting}
-            className="delete-confirm-btn"
-            style={{
-              cursor: 'pointer',
-              backgroundColor: '#ef4444',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '8px 16px',
-              fontWeight: 700,
-              fontSize: '0.875rem',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              opacity: isDeleting ? 0.7 : 1,
-            }}
+            onClick={handleConfirmDeleteAccount}
+            className="confirm-delete-btn"
           >
-            {isDeleting ? 'Deleting...' : '🗑️ YES, DELETE MY ACCOUNT'}
+            YES, DELETE MY ACCOUNT
           </button>
         </DialogActions>
       </Dialog>

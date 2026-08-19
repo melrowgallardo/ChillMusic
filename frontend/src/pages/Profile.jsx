@@ -127,7 +127,7 @@ const Profile = () => {
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 1.5, py: 2 }}>
           <Avatar
             src={currentAvatar}
-            alt={user.username || 'User'}
+            alt={safeUsername}
             sx={{
               width: 110,
               height: 110,
@@ -137,10 +137,10 @@ const Profile = () => {
             }}
           />
           <Typography variant="h4" sx={{ fontWeight: 800, fontFamily: 'var(--font-heading)' }}>
-            {user.username || user.displayName || 'User'}
+            {safeUsername}
           </Typography>
           <Typography variant="body1" sx={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
-            {user.email || 'No email provided'}
+            {safeEmail}
           </Typography>
           <Button
             variant="outlined"

@@ -140,3 +140,23 @@ button {
   animation: sparkleGlow 1.5s infinite ease-in-out;
 }
 
+.confirm-delete-btn {
+  cursor: pointer;
+  background-color: #ef4444;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 700;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.confirm-delete-btn:hover {
+  background-color: #dc2626;
+}
+
+
