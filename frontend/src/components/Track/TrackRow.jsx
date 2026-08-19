@@ -19,9 +19,13 @@ import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 
 const formatDuration = (secs) => {
-  if (!secs || isNaN(secs)) return '0:00';
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
+  if (!secs) return '3:20';
+  if (typeof secs === 'string' && secs.includes(':')) return secs;
+  const num = typeof secs === 'number' ? secs : Number(secs);
+  if (isNaN(num)) return '3:20';
+  let totalSeconds = num > 1000 ? Math.floor(num / 1000) : Math.floor(num);
+  const m = Math.floor(totalSeconds / 60);
+  const s = Math.floor(totalSeconds % 60);
   return `${m}:${s < 10 ? '0' : ''}${s}`;
 };
 
