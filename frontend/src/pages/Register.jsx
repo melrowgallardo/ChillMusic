@@ -16,9 +16,12 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
+  signOut,
+  getAuth,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { parseSafeJson } from '../utils/storage';
+import { useAuth } from '../context/AuthContext';
 import emailjs from '@emailjs/browser';
 
 const GoogleIcon = () => (
@@ -61,6 +64,9 @@ const formatErrorMessage = (err) => {
 
 const Register = () => {
   const navigate = useNavigate();
+  const authContext = useAuth() || {};
+  const setUser = authContext.setUser;
+  const setIsAuthenticated = authContext.setIsAuthenticated;
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -198,54 +204,101 @@ const Register = () => {
   };
 
   const handleGoogleAuth = async () => {
-    setError('');
     setLoading(true);
-    try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      const result = await signInWithPopup(auth, provider);
-      const googleUser = result.user;
-      const idToken = await googleUser.getIdToken();
-      const userDisplayName = googleUser.displayName || googleUser.email?.split('@')[0] || 'User';
+    setError('');
 
-      const userRef = doc(db, 'users', googleUser.uid);
-      const userSnap = await getDoc(userRef);
+    const authInstance = getAuth();
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    try {
+      const result = await signInWithPopup(authInstance, provider);
+      const googleUser = result.user;
+      const email = googleUser.email?.toLowerCase().trim();
+
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      let alreadyExists = false;
+
+      const userDocRef = doc(db, 'users', googleUser.uid);
+      const userSnap = await getDoc(userDocRef);
+
+      // 1. Check if email is already registered
+      if (apiUrl) {
+        try {
+          const res = await fetch(`${apiUrl}/api/auth/check-email?email=${encodeURIComponent(email)}`);
+          if (res.ok) {
+            const data = await parseSafeJson(res);
+            alreadyExists = Boolean(data.exists) || userSnap.exists();
+          } else {
+            alreadyExists = userSnap.exists();
+          }
+        } catch (err) {
+          console.warn('Backend check bypassed:', err);
+          alreadyExists = userSnap.exists();
+        }
+      } else {
+        const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
+        alreadyExists = userSnap.exists() || registered.some((u) => u.email?.toLowerCase().trim() === email);
+      }
+
+      // 2. If already registered, reject registration and prompt user to login
+      if (alreadyExists) {
+        await signOut(authInstance).catch(() => {});
+        setLoading(false);
+        const errMsg = 'This email is already registered. Please Sign In instead.';
+        setError(errMsg);
+        alert('This email is already registered. Please sign in instead.');
+        return;
+      }
+
+      // 3. If new, register the user into backend or local store
+      const newUser = {
+        id: googleUser.uid,
+        uid: googleUser.uid,
+        username: googleUser.displayName || email.split('@')[0],
+        email: email,
+        avatar: googleUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${email}`,
+        avatar_url: googleUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${email}`,
+      };
+
       if (!userSnap.exists()) {
-        await setDoc(userRef, {
-          username: userDisplayName,
-          email: googleUser.email,
+        await setDoc(userDocRef, {
+          username: newUser.username,
+          email: newUser.email,
           photoURL: googleUser.photoURL || '',
           isVerified: true,
           createdAt: new Date(),
-        });
+        }).catch((e) => console.warn(e));
       }
 
-      try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/google-register`, {
+      const idToken = await googleUser.getIdToken();
+      if (apiUrl) {
+        await fetch(`${apiUrl}/api/auth/google-register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             credential: idToken,
-            email: googleUser.email,
-            name: userDisplayName,
+            email: email,
+            name: newUser.username,
             picture: googleUser.photoURL || '',
           }),
-        });
-
-        const data = await parseSafeJson(res);
-        if (res.ok && data?.user) {
-          localStorage.setItem('access_token', data.access_token);
-          localStorage.setItem('user', JSON.stringify(data.user));
-        }
-      } catch (backendErr) {
-        console.warn('Backend Google Auth Sync Warning:', backendErr);
+        }).catch((err) => console.warn('Backend save bypassed:', err));
+      } else {
+        const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
+        registered.push(newUser);
+        localStorage.setItem('registered_users', JSON.stringify(registered));
       }
 
+      // 4. Save session and redirect straight to home dashboard
+      localStorage.setItem('user', JSON.stringify(newUser));
+      localStorage.setItem('access_token', idToken);
+      if (setUser) setUser(newUser);
+      if (setIsAuthenticated) setIsAuthenticated(true);
       window.location.replace('/');
     } catch (err) {
-      console.error('Google Auth error:', err);
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setError('Failed to sign in with Google. Please try again.');
+      console.error('Google Sign-Up Error:', err);
+      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
+        setError(err.message || 'Failed to register with Google.');
       }
     } finally {
       setLoading(false);
@@ -299,9 +352,11 @@ const Register = () => {
         </Box>
 
         {error && (
-          <Alert severity="error" sx={{ width: '100%', borderRadius: 'var(--radius-sm)' }}>
-            {error}
-          </Alert>
+          <div className="w-full p-3 mb-4 text-sm text-center text-red-200 bg-red-600/30 border border-red-500 rounded-xl" style={{ width: '100%' }}>
+            <Alert severity="error" sx={{ width: '100%', borderRadius: 'var(--radius-sm)' }}>
+              ⚠️ {error}
+            </Alert>
+          </div>
         )}
 
         <Button
