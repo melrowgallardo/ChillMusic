@@ -1,32 +1,74 @@
 import React, { useState } from 'react';
-import { searchYouTubeMusic } from '../services/youtubeService';
 import { useMusic } from '../context/MusicContext';
 import { FiSearch, FiPlay, FiPause, FiMoreVertical } from 'react-icons/fi';
 
 export default function Search() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [songs, setSongs] = useState([]);
-  const [activeTab, setActiveTab] = useState('songs');
-  const [isLoading, setIsLoading] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
   const { currentTrack, isPlaying, playTrack, setIsPlaying } = useMusic() || {};
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
-    if (!searchQuery.trim()) return;
+    if (!query.trim()) return;
 
-    setIsLoading(true);
+    setLoading(true);
     try {
-      const results = await searchYouTubeMusic(searchQuery.trim());
-      setSongs(Array.isArray(results) ? results : []);
+      const apiKey =
+        import.meta.env.VITE_YOUTUBE_API_KEY ||
+        import.meta.env.YOUTUBE_API_KEY ||
+        'AIzaSyAVW_86xvVRgRWu25NFhyiPGBSpuHx_BvA';
+
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=25&q=${encodeURIComponent(
+          query + ' official audio'
+        )}&type=video&videoCategoryId=10&key=${apiKey}`
+      );
+      const data = await res.json();
+
+      if (data.items && data.items.length > 0) {
+        const videoIds = data.items.map((i) => i.id?.videoId || i.id).filter(Boolean).join(',');
+        const detailsRes = await fetch(
+          `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoIds}&key=${apiKey}`
+        );
+        const detailsData = await detailsRes.json();
+
+        const formatted = (detailsData.items || []).map((item) => {
+          // Duration parser
+          const match = (item.contentDetails?.duration || '').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+          const mins = parseInt(match?.[2] || 0, 10);
+          const secs = parseInt(match?.[3] || 0, 10);
+          const durStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+          return {
+            id: item.id,
+            youtubeId: item.id,
+            title: item.snippet?.title?.replace(/(\(Official.*|\(Lyrics.*|\[Official.*|\[Lyrics.*)/gi, '').trim() || query,
+            artist: item.snippet?.channelTitle || 'Artist',
+            artist_name: item.snippet?.channelTitle || 'Artist',
+            album: item.snippet?.channelTitle || 'YouTube Music',
+            album_name: item.snippet?.channelTitle || 'YouTube Music',
+            thumbnail: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.high?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
+            image_url: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.high?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
+            cover_url: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.high?.url || `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`,
+            duration: durStr || '3:30',
+            durationRaw: mins * 60 + secs || 210,
+          };
+        });
+
+        setResults(formatted);
+      } else {
+        setResults([]);
+      }
     } catch (err) {
-      console.error('Search error:', err);
-      setSongs([]);
+      console.error('Search API error:', err);
+      setResults([]);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleTrackPlay = (track) => {
+  const handlePlay = (track) => {
     if (currentTrack?.id === track.id || (currentTrack?.youtubeId && currentTrack?.youtubeId === track.id)) {
       if (setIsPlaying) setIsPlaying(!isPlaying);
     } else {
@@ -34,170 +76,117 @@ export default function Search() {
     }
   };
 
-  const songList = Array.isArray(songs) ? songs : [];
-
   return (
-    <div className="min-h-screen p-8 text-white space-y-6 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold tracking-tight">Search & Discover</h1>
+    <div style={{ padding: '32px', color: '#ffffff', maxWidth: '1200px', margin: '0 auto' }}>
+      <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '24px' }}>Search & Discover</h1>
 
-      {/* Search Input Bar */}
-      <form onSubmit={handleSearch} className="flex items-center gap-3 w-full">
-        <div className="relative flex-1">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
-            <FiSearch size={20} />
-          </div>
+      {/* Guaranteed Styled Search Bar */}
+      <form onSubmit={handleSearch} style={{ display: 'flex', gap: '12px', marginBottom: '24px', width: '100%', maxWidth: '800px' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <FiSearch style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: '18px' }} />
           <input
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search songs, artists (e.g. Twice, Taylor Swift)..."
-            className="w-full pl-12 pr-4 py-3.5 bg-[#181824] border border-[#2a2b3d] rounded-xl text-white text-base placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors shadow-inner"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search songs, artists (e.g. Taylor Swift, Twice)..."
+            style={{
+              width: '100%',
+              padding: '14px 16px 14px 48px',
+              backgroundColor: '#181824',
+              border: '1px solid #2a2b3d',
+              borderRadius: '12px',
+              color: '#ffffff',
+              fontSize: '15px',
+              outline: 'none',
+              boxSizing: 'border-box'
+            }}
           />
         </div>
         <button
           type="submit"
-          disabled={isLoading}
-          className="px-8 py-3.5 bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-bold rounded-xl text-sm tracking-wider uppercase transition shadow-lg disabled:opacity-50 flex items-center justify-center min-w-[120px] cursor-pointer"
+          disabled={loading}
+          style={{
+            padding: '0 32px',
+            backgroundColor: '#7c3aed',
+            color: '#ffffff',
+            fontWeight: '700',
+            borderRadius: '12px',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '14px',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            transition: 'background 0.2s',
+            opacity: loading ? 0.6 : 1
+          }}
         >
-          {isLoading ? 'Searching...' : 'SEARCH'}
+          {loading ? 'SEARCHING...' : 'SEARCH'}
         </button>
       </form>
 
-      {/* Category Tabs */}
-      <div className="flex items-center gap-6 border-b border-[#2a2b3d] pt-2 text-sm font-semibold tracking-wide uppercase">
-        <button
-          type="button"
-          onClick={() => setActiveTab('songs')}
-          className={`pb-3.5 border-b-2 transition cursor-pointer ${
-            activeTab === 'songs'
-              ? 'border-purple-500 text-purple-400 font-bold'
-              : 'border-transparent text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          SONGS ({songList.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('artists')}
-          className={`pb-3.5 border-b-2 transition cursor-pointer ${
-            activeTab === 'artists'
-              ? 'border-purple-500 text-purple-400 font-bold'
-              : 'border-transparent text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          ARTISTS (0)
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('albums')}
-          className={`pb-3.5 border-b-2 transition cursor-pointer ${
-            activeTab === 'albums'
-              ? 'border-purple-500 text-purple-400 font-bold'
-              : 'border-transparent text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          ALBUMS (0)
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('playlists')}
-          className={`pb-3.5 border-b-2 transition cursor-pointer ${
-            activeTab === 'playlists'
-              ? 'border-purple-500 text-purple-400 font-bold'
-              : 'border-transparent text-gray-400 hover:text-gray-200'
-          }`}
-        >
-          PLAYLISTS (0)
-        </button>
+      {/* Tab Navigation */}
+      <div style={{ display: 'flex', gap: '24px', borderBottom: '1px solid #2a2b3d', paddingBottom: '12px', marginBottom: '20px', fontSize: '14px', fontWeight: '700' }}>
+        <span style={{ color: '#a855f7', borderBottom: '2px solid #a855f7', paddingBottom: '12px', cursor: 'pointer' }}>
+          SONGS ({results.length})
+        </span>
+        <span style={{ color: '#6b7280', cursor: 'pointer' }}>ARTISTS (0)</span>
+        <span style={{ color: '#6b7280', cursor: 'pointer' }}>ALBUMS (0)</span>
+        <span style={{ color: '#6b7280', cursor: 'pointer' }}>PLAYLISTS (0)</span>
       </div>
 
-      {/* Search Results Display */}
-      <div className="pt-2">
-        {isLoading ? (
-          <div className="py-20 text-center text-gray-400">
-            <p className="text-base">Searching YouTube Music...</p>
-          </div>
-        ) : songList.length === 0 ? (
-          <div className="py-20 text-center text-gray-500">
-            <p className="text-base">No tracks available. Type a keyword and click Search.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="text-gray-400 text-xs font-semibold uppercase tracking-wider border-b border-[#2a2b3d]/60">
-                  <th className="py-3 px-4 w-12 text-center">#</th>
-                  <th className="py-3 px-4">TITLE</th>
-                  <th className="py-3 px-4 hidden md:table-cell">ALBUM / CHANNEL</th>
-                  <th className="py-3 px-4 text-right">DURATION</th>
-                  <th className="py-3 px-4 w-12"></th>
+      {/* Results Table */}
+      {loading ? (
+        <div style={{ padding: '60px 0', textAlign: 'center', color: '#9ca3af' }}>Searching YouTube Music for "{query}"...</div>
+      ) : results.length === 0 ? (
+        <div style={{ padding: '60px 0', textAlign: 'center', color: '#6b7280' }}>No tracks available. Type a keyword and click Search.</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <thead>
+            <tr style={{ color: '#9ca3af', fontSize: '12px', textTransform: 'uppercase', borderBottom: '1px solid #2a2b3d' }}>
+              <th style={{ padding: '12px 16px', width: '40px', textAlign: 'center' }}>#</th>
+              <th style={{ padding: '12px 16px' }}>TITLE</th>
+              <th style={{ padding: '12px 16px' }}>ALBUM / CHANNEL</th>
+              <th style={{ padding: '12px 16px', textAlign: 'right' }}>DURATION</th>
+              <th style={{ padding: '12px 16px', width: '40px' }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {results.map((track, idx) => {
+              const isCurrent = currentTrack?.id === track.id || (currentTrack?.youtubeId && currentTrack?.youtubeId === track.id);
+              return (
+                <tr
+                  key={track.id || idx}
+                  onClick={() => handlePlay(track)}
+                  style={{
+                    borderBottom: '1px solid #1e202f',
+                    cursor: 'pointer',
+                    backgroundColor: isCurrent ? '#1f1f2e' : 'transparent',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#181824')}
+                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = isCurrent ? '#1f1f2e' : 'transparent')}
+                >
+                  <td style={{ padding: '14px 16px', textAlign: 'center', color: isCurrent ? '#a855f7' : '#9ca3af', fontSize: '14px' }}>
+                    {isCurrent && isPlaying ? <FiPause /> : idx + 1}
+                  </td>
+                  <td style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <img src={track.thumbnail} alt={track.title} style={{ width: '44px', height: '44px', borderRadius: '8px', objectFit: 'cover' }} />
+                    <div>
+                      <p style={{ margin: 0, fontWeight: '600', fontSize: '14px', color: isCurrent ? '#a855f7' : '#ffffff' }}>{track.title}</p>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#9ca3af' }}>{track.artist}</p>
+                    </div>
+                  </td>
+                  <td style={{ padding: '14px 16px', color: '#9ca3af', fontSize: '14px' }}>{track.album}</td>
+                  <td style={{ padding: '14px 16px', color: '#9ca3af', fontSize: '13px', textAlign: 'right', fontFamily: 'monospace' }}>{track.duration}</td>
+                  <td style={{ padding: '14px 16px', textAlign: 'right', color: '#9ca3af' }}>
+                    <FiMoreVertical size={16} />
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1e202f]">
-                {songList.map((track, index) => {
-                  const isCurrent =
-                    currentTrack?.id === track.id ||
-                    (currentTrack?.youtubeId && currentTrack?.youtubeId === track.id) ||
-                    (currentTrack?.id && track.youtubeId && currentTrack.id === track.youtubeId);
-
-                  return (
-                    <tr
-                      key={track.id || index}
-                      onClick={() => handleTrackPlay(track)}
-                      className={`group hover:bg-[#181824]/90 transition cursor-pointer ${
-                        isCurrent ? 'bg-[#181824] text-purple-400' : ''
-                      }`}
-                    >
-                      <td className="py-3.5 px-4 text-center text-gray-400 group-hover:text-white text-sm">
-                        {isCurrent && isPlaying ? (
-                          <FiPause className="text-purple-400 mx-auto" />
-                        ) : (
-                          <>
-                            <span className="group-hover:hidden">{index + 1}</span>
-                            <FiPlay className="hidden group-hover:inline text-purple-400 mx-auto" />
-                          </>
-                        )}
-                      </td>
-
-                      <td className="py-3.5 px-4 flex items-center gap-3.5">
-                        <img
-                          src={track.thumbnail || track.image_url || track.cover_url || 'https://via.placeholder.com/44'}
-                          alt={track.title}
-                          className="w-11 h-11 rounded-lg object-cover bg-black/40 shadow"
-                        />
-                        <div className="overflow-hidden max-w-md">
-                          <p className={`font-medium text-sm truncate ${isCurrent ? 'text-purple-400' : 'text-white'}`}>
-                            {track.title}
-                          </p>
-                          <p className="text-xs text-gray-400 truncate mt-0.5">{track.artist || track.artist_name}</p>
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-gray-400 hidden md:table-cell text-sm truncate max-w-xs">
-                        {track.album || track.artist || 'YouTube Music'}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-gray-400 text-right font-mono text-xs">
-                        {track.duration || '3:30'}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-gray-400 text-right">
-                        <button
-                          type="button"
-                          onClick={(e) => e.stopPropagation()}
-                          className="hover:text-white p-1 rounded-md cursor-pointer"
-                        >
-                          <FiMoreVertical size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
