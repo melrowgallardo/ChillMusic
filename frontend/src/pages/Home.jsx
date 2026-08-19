@@ -105,8 +105,9 @@ const Home = () => {
       // 2. Fetch Personalized YouTube Categories & Playlists dynamically via YouTube Data API
       try {
         const userQueries = getPersonalizedQueriesForUser(user, recentlyPlayed, favorites);
-        const [hitsRes, newRelRes, chillRes, playlistsRes, artistsRes] = await Promise.all([
-          fetchDiverseCategory(userQueries).catch(() => []),
+        const [hitsRes, trendingRes, newRelRes, chillRes, playlistsRes, artistsRes] = await Promise.all([
+          getTrendingTracks().catch(() => []),
+          getTrendingTracks().catch(() => []),
           fetchDiverseCategory(NEW_RELEASE_QUERIES).catch(() => []),
           fetchDiverseCategory(CHILL_QUERIES).catch(() => []),
           searchYouTubePlaylists('Top Hits Playlist').catch(() => []),
@@ -114,16 +115,8 @@ const Home = () => {
         ]);
 
         if (isMounted) {
-          let hits = hitsRes.length > 0 ? hitsRes : [];
-          if (hits.length === 0) {
-            try {
-              hits = await getTrendingTracks();
-            } catch (apiErr) {
-              console.error('Failed to load trending music from API:', apiErr);
-            }
-          }
-
-          const trending = hits.length > 0 ? [...hits].reverse() : [];
+          let hits = hitsRes.length > 0 ? hitsRes : await fetchDiverseCategory(userQueries).catch(() => []);
+          const trending = trendingRes.length > 0 ? trendingRes : (hits.length > 0 ? [...hits].reverse() : []);
           const newRel = newRelRes.length > 0 ? newRelRes : [];
           const chill = chillRes.length > 0 ? chillRes : [];
           const playlists = playlistsRes.length > 0 ? playlistsRes : [];
