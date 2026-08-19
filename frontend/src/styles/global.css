@@ -140,7 +140,8 @@ button {
   animation: sparkleGlow 1.5s infinite ease-in-out;
 }
 
-.confirm-delete-btn {
+.confirm-delete-btn,
+.delete-confirm-button {
   cursor: pointer;
   background-color: #ef4444;
   color: #ffffff;
@@ -155,7 +156,8 @@ button {
   transition: background-color 0.2s ease;
 }
 
-.confirm-delete-btn:hover {
+.confirm-delete-btn:hover,
+.delete-confirm-button:hover {
   background-color: #dc2626;
 }
 

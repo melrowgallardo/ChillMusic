@@ -162,43 +162,70 @@ export const AuthProvider = ({ children }) => {
   };
 
   const deleteAccount = async () => {
-    try {
-      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-      if (token) {
-        await fetch(`${import.meta.env.VITE_API_URL || ''}/api/auth/delete-account`, {
+    const currentUserId = user?.id || user?._id || user?.email || user?.uid;
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+    const apiUrl = import.meta.env.VITE_API_URL || '';
+
+    // 1. Attempt API deletion on backend
+    if (apiUrl && token) {
+      try {
+        await fetch(`${apiUrl}/api/auth/delete-account`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-        }).catch((e) => console.warn('Backend delete-account completed with fallback:', e));
+        });
+      } catch (err) {
+        console.warn('Backend delete error:', err);
       }
-
-      const uid = user?.uid || user?.id || auth.currentUser?.uid;
-      if (uid) {
-        try {
-          await deleteDoc(doc(db, 'users', uid));
-        } catch (e) {
-          console.warn('Could not delete user doc in Firestore:', e);
-        }
-      }
-      if (auth.currentUser) {
-        try {
-          await deleteUser(auth.currentUser);
-        } catch (e) {
-          console.warn('Firebase delete user warning:', e);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to delete user account on backend:', err);
-    } finally {
-      // Clear all stored credentials and sessions
-      localStorage.clear();
-      sessionStorage.clear();
-      setUser(null);
-      setIsAuthenticated(false);
-      window.location.replace('/login');
     }
+
+    const uid = user?.uid || user?.id || auth.currentUser?.uid;
+    if (uid) {
+      try {
+        await deleteDoc(doc(db, 'users', uid));
+      } catch (e) {
+        console.warn('Could not delete user doc in Firestore:', e);
+      }
+    }
+    if (auth.currentUser) {
+      try {
+        await deleteUser(auth.currentUser);
+      } catch (e) {
+        console.warn('Firebase delete user warning:', e);
+      }
+    }
+
+    // 2. Remove user from registered users array if stored locally
+    try {
+      const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
+      const updatedUsers = registered.filter(
+        (u) => u.id !== currentUserId && u.email !== user?.email
+      );
+      localStorage.setItem('registered_users', JSON.stringify(updatedUsers));
+    } catch (e) {
+      console.warn(e);
+    }
+
+    // 3. Purge all personal user storage and auth tokens
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('chillmusic_auth');
+    if (currentUserId) {
+      localStorage.removeItem(`recently_played_${currentUserId}`);
+      localStorage.removeItem(`favorites_${currentUserId}`);
+      localStorage.removeItem(`playlists_${currentUserId}`);
+    }
+
+    // Clear any remaining keys
+    sessionStorage.clear();
+    setUser(null);
+    setIsAuthenticated(false);
+
+    // 4. Force hard redirect to login
+    window.location.replace('/login');
   };
 
 

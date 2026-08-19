@@ -435,10 +435,13 @@ const SettingsModal = ({ open, onClose, user: propUser, updateUserProfile, chang
           </Button>
           <button
             type="button"
-            onClick={handleConfirmDeleteAccount}
-            className="confirm-delete-btn"
+            onClick={async (e) => {
+              e.stopPropagation();
+              await deleteAccount();
+            }}
+            className="delete-confirm-button confirm-delete-btn"
           >
-            YES, DELETE MY ACCOUNT
+            🗑️ YES, DELETE MY ACCOUNT
           </button>
         </DialogActions>
       </Dialog>
