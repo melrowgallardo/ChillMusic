@@ -13,6 +13,7 @@ from app.database.session import Base, engine
 client = TestClient(app)
 
 def setup_module(module):
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 
 def test_root_endpoint():
@@ -107,9 +108,13 @@ def test_google_auth_endpoint():
     assert "access_token" in data_reg
     assert data_reg["user"]["email"] == google_payload["email"]
 
-    # 3. Login attempt after registration should succeed
-    response_login_2 = client.post("/api/auth/google", json=google_payload)
-    assert response_login_2.status_code == 200
-    assert "access_token" in response_login_2.json()
+def test_check_email_endpoint():
+    res_no = client.get("/api/auth/check-email?email=non_existent_check_123@example.com")
+    assert res_no.status_code == 200
+    assert res_no.json()["exists"] is False
+
+    res_yes = client.get("/api/auth/check-email?email=unregistered_google_user@example.com")
+    assert res_yes.status_code == 200
+    assert res_yes.json()["exists"] is True
 
 

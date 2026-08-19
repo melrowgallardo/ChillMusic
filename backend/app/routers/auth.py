@@ -12,6 +12,12 @@ from app.auth.jwt import get_password_hash, verify_password, create_access_token
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 
+@router.get("/check-email")
+def check_email(email: str, db: Session = Depends(get_db)):
+    clean_email = email.strip().lower()
+    user = db.query(User).filter(User.email == clean_email).first()
+    return {"exists": bool(user), "email": clean_email}
+
 @router.post("/register", response_model=UserProfile, status_code=status.HTTP_201_CREATED)
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
     clean_email = user_data.email.strip().lower()

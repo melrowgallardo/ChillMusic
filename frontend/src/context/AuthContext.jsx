@@ -45,42 +45,67 @@ export const AuthProvider = ({ children }) => {
 
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
+    const authInstance = getAuth();
+    const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.email) {
         try {
-          const idToken = await firebaseUser.getIdToken();
-          setToken(idToken);
-          setIsAuthenticated(true);
-          localStorage.setItem('access_token', idToken);
+          const apiUrl = import.meta.env.VITE_API_URL || '';
+          let exists = false;
 
-          const docRef = doc(db, 'users', firebaseUser.uid);
-          const docSnap = await getDoc(docRef);
+          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userSnap = await getDoc(userDocRef);
 
-          if (docSnap.exists()) {
-            const userData = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              ...docSnap.data(),
-            };
-            setUser(userData);
-            localStorage.setItem('user', JSON.stringify(userData));
+          if (apiUrl) {
+            try {
+              const res = await fetch(`${apiUrl}/api/auth/check-email?email=${encodeURIComponent(firebaseUser.email)}`);
+              if (res.ok) {
+                const data = await res.json();
+                exists = Boolean(data.exists) || userSnap.exists();
+              } else {
+                exists = userSnap.exists();
+              }
+            } catch (e) {
+              exists = userSnap.exists();
+            }
           } else {
-            const fallbackUser = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              username: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-            };
-            setUser(fallbackUser);
-            localStorage.setItem('user', JSON.stringify(fallbackUser));
+            const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
+            exists = userSnap.exists() || registered.some((u) => u.email?.toLowerCase() === firebaseUser.email.toLowerCase());
           }
-        } catch (err) {
-          console.error('Error fetching user data from Firestore:', err);
-          const fallbackUser = {
+
+          if (!exists) {
+            // Account was deleted or not registered: Force Firebase SignOut & Clear State
+            await signOut(authInstance).catch(() => {});
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+            setIsAuthenticated(false);
+            setLoading(false);
+            return;
+          }
+
+          const idToken = await firebaseUser.getIdToken().catch(() => null);
+          if (idToken) {
+            setToken(idToken);
+            localStorage.setItem('access_token', idToken);
+          }
+
+          const userProfile = {
             uid: firebaseUser.uid,
-            email: firebaseUser.email,
+            id: firebaseUser.uid,
             username: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+            email: firebaseUser.email,
+            avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${firebaseUser.email}`,
+            avatar_url: firebaseUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${firebaseUser.email}`,
+            ...(userSnap.exists() ? userSnap.data() : {}),
           };
-          setUser(fallbackUser);
+          setUser(userProfile);
+          setIsAuthenticated(true);
+          localStorage.setItem('user', JSON.stringify(userProfile));
+        } catch (err) {
+          console.error('Session validation error:', err);
+          setUser(null);
+          setIsAuthenticated(false);
         }
       } else {
         setUser(null);
@@ -202,6 +227,9 @@ export const AuthProvider = ({ children }) => {
         return;
       }
     } finally {
+      // Force SignOut from Firebase
+      await signOut(authInstance).catch(() => {});
+
       // 3. Remove user from registered users array if stored locally
       try {
         const registered = JSON.parse(localStorage.getItem('registered_users') || '[]');
