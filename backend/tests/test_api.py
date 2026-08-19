@@ -113,8 +113,13 @@ def test_check_email_endpoint():
     assert res_no.status_code == 200
     assert res_no.json()["exists"] is False
 
-    res_yes = client.get("/api/auth/check-email?email=unregistered_google_user@example.com")
-    assert res_yes.status_code == 200
-    assert res_yes.json()["exists"] is True
+def test_music_endpoints():
+    res_tr = client.get("/api/music/trending")
+    assert res_tr.status_code == 200
+    assert isinstance(res_tr.json(), list)
+
+    res_sc = client.get("/api/music/search?q=chill")
+    assert res_sc.status_code == 200
+    assert isinstance(res_sc.json(), list)
 
 

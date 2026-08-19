@@ -117,13 +117,20 @@ const Home = () => {
           if (hits.length === 0) {
             try {
               const apiUrl = import.meta.env.VITE_API_URL || '';
-              const res = await fetch(`${apiUrl}/api/tracks`);
+              const res = await fetch(`${apiUrl}/api/music/trending`);
               if (res.ok) {
                 const data = await res.json();
                 hits = Array.isArray(data) ? data : (data.tracks || data.items || []);
               }
+              if (hits.length === 0) {
+                const resTracks = await fetch(`${apiUrl}/api/tracks`);
+                if (resTracks.ok) {
+                  const dataT = await resTracks.json();
+                  hits = Array.isArray(dataT) ? dataT : (dataT.tracks || dataT.items || []);
+                }
+              }
             } catch (apiErr) {
-              console.error('Failed to load home tracks from API:', apiErr);
+              console.error('Failed to load trending music from API:', apiErr);
             }
           }
 

@@ -115,10 +115,17 @@ const Search = () => {
       if (results.length === 0) {
         try {
           const apiUrl = import.meta.env.VITE_API_URL || '';
-          const res = await fetch(`${apiUrl}/api/search?q=${encodeURIComponent(term)}`);
+          const res = await fetch(`${apiUrl}/api/music/search?q=${encodeURIComponent(term)}`);
           if (res.ok) {
             const data = await res.json();
-            results = Array.isArray(data) ? data : (data.results || data.tracks || data.items || []);
+            results = Array.isArray(data) ? data : (data.songs || data.tracks || data.results || []);
+          }
+          if (results.length === 0) {
+            const resFallback = await fetch(`${apiUrl}/api/search?q=${encodeURIComponent(term)}`);
+            if (resFallback.ok) {
+              const dataF = await resFallback.json();
+              results = Array.isArray(dataF) ? dataF : (dataF.results || dataF.tracks || dataF.items || []);
+            }
           }
         } catch (apiErr) {
           console.error('API search error:', apiErr);

@@ -6,7 +6,7 @@ from app.config import settings
 from app.database.session import engine, Base, get_db
 from app.models.models import User
 from app.auth.jwt import get_current_user
-from app.routers import auth, user, songs, artists, albums, playlists, favorites, history, downloads, youtube, deezer, lyrics
+from app.routers import auth, user, songs, artists, albums, playlists, favorites, history, downloads, youtube, deezer, lyrics, music
 
 
 # Setup logging
@@ -46,6 +46,7 @@ app.include_router(downloads.router)
 app.include_router(youtube.router)
 app.include_router(deezer.router)
 app.include_router(lyrics.router)
+app.include_router(music.router)
 
 from app.services.jamendo_service import JamendoService
 from app.services.youtube_service import YouTubeService
