@@ -39,46 +39,40 @@ const AlbumDetail = () => {
       setLoading(true);
       const cleanId = String(id || '').replace('it_', '').replace('dz_', '').replace('saavn_alb_', '');
 
-      // 2. Fetch direct from iTunes Lookup API: https://itunes.apple.com/lookup?id=${id}&entity=song
+      // 2. Fetch tracks using YouTube Music search service
       try {
-        const res = await fetch(`https://itunes.apple.com/lookup?id=${cleanId}&entity=song`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.results && data.results.length > 0) {
-            const albumInfo = data.results[0]; // Collection header info
-            const tracks = data.results.slice(1).map((track) =>
-              normalizeTrack({
-                id: String(track.trackId || track.id || Math.random()),
-                title: track.trackName || track.title || 'Unknown Track',
-                artist: track.artistName || albumInfo.artistName || 'Unknown Artist',
-                artist_name: track.artistName || albumInfo.artistName || 'Unknown Artist',
-                album: track.collectionName || albumInfo.collectionName || 'Album',
-                album_name: track.collectionName || albumInfo.collectionName || 'Album',
-                cover: (track.artworkUrl100 || albumInfo.artworkUrl100 || '').replace('100x100bb', '500x500bb'),
-                duration: track.trackTimeMillis ? Math.floor(track.trackTimeMillis / 1000) : 180,
-                audioUrl: track.previewUrl || track.audioUrl || track.streamUrl || '',
-                previewUrl: track.previewUrl || '',
-                source: 'itunes',
-              })
-            );
+        const { searchYouTubeMusic } = await import('../services/youtubeService');
+        const ytTracks = await searchYouTubeMusic(`${passedAlbum?.title || passedAlbum?.name || cleanId} album`);
+        if (ytTracks && ytTracks.length > 0) {
+          const tracks = ytTracks.map((track) =>
+            normalizeTrack({
+              id: track.youtubeId || track.id,
+              youtubeId: track.youtubeId || track.id,
+              title: track.title,
+              artist: track.artist || passedAlbum?.artist || 'Artist',
+              artist_name: track.artist || passedAlbum?.artist_name || 'Artist',
+              album: passedAlbum?.title || passedAlbum?.name || 'Album',
+              album_name: passedAlbum?.title || passedAlbum?.name || 'Album',
+              cover: track.thumbnail || passedAlbum?.cover || '',
+              duration: track.durationRaw || 210,
+              source: 'youtube',
+            })
+          );
 
-            setAlbum({
-              id: albumInfo.collectionId || cleanId,
-              title: albumInfo.collectionName || passedAlbum?.title || 'Unknown Album',
-              name: albumInfo.collectionName || passedAlbum?.name || 'Unknown Album',
-              artist: albumInfo.artistName || passedAlbum?.artist || 'Various Artists',
-              artist_name: albumInfo.artistName || passedAlbum?.artist_name || 'Various Artists',
-              cover: (albumInfo.artworkUrl100 || passedAlbum?.coverUrl || passedAlbum?.image || '').replace('100x100bb', '500x500bb'),
-              image: (albumInfo.artworkUrl100 || passedAlbum?.coverUrl || passedAlbum?.image || '').replace('100x100bb', '500x500bb'),
-              releaseDate: albumInfo.releaseDate?.split('-')[0] || passedAlbum?.releaseDate || 'Recent',
-              tracks: tracks,
-            });
-            setLoading(false);
-            return;
-          }
+          setAlbum({
+            id: cleanId,
+            title: passedAlbum?.title || passedAlbum?.name || 'Album',
+            name: passedAlbum?.title || passedAlbum?.name || 'Album',
+            artist: passedAlbum?.artist || passedAlbum?.artist_name || 'Various Artists',
+            artist_name: passedAlbum?.artist || passedAlbum?.artist_name || 'Various Artists',
+            cover: passedAlbum?.cover || trackCover,
+            tracks: tracks,
+          });
+          setLoading(false);
+          return;
         }
-      } catch (err) {
-        console.warn('iTunes lookup fetch failed, trying fallback details service:', err);
+      } catch (ytErr) {
+        console.warn('YouTube album fetch fallback error:', ytErr);
       }
 
       // 3. Fallback to Jamendo / Deezer / Backend getAlbumDetails

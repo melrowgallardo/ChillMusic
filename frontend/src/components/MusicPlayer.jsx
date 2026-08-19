@@ -81,7 +81,7 @@ export default function MusicPlayer() {
           key={videoId}
           title="YouTube Audio Stream"
           className="absolute -top-[9999px] -left-[9999px] w-1 h-1 pointer-events-none opacity-0"
-          src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&origin=${window.location.origin}`}
+          src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&start=0&origin=${window.location.origin}`}
           allow="autoplay"
         />
       )}

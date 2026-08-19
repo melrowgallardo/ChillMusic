@@ -1,9 +1,8 @@
-export const formatDuration = (millisOrSeconds) => {
-  if (!millisOrSeconds) return '3:20';
-  let totalSeconds = millisOrSeconds > 1000 ? Math.floor(millisOrSeconds / 1000) : Math.floor(millisOrSeconds);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+export const formatDuration = (seconds) => {
+  if (!seconds) return '3:30';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
 export const searchYouTubeMusic = async (query) => {
@@ -16,84 +15,86 @@ export const searchYouTubeMusic = async (query) => {
           const data = await res.json();
           const tracks = Array.isArray(data) ? data : (data.songs || data.tracks || []);
           if (tracks.length > 0) {
-            return tracks.map((item) => ({
-              id: item.youtubeId || item.id,
-              youtubeId: item.youtubeId || item.id,
-              youtube_id: item.youtubeId || item.id,
-              title: item.title,
-              artist: item.artist || item.artist_name || 'Artist',
-              artist_name: item.artist || item.artist_name || 'Artist',
-              album: item.album || item.album_name || item.artist || 'Official Release',
-              album_name: item.album || item.album_name || item.artist || 'Official Release',
-              thumbnail: item.thumbnail || item.image_url || item.cover_url,
-              image_url: item.thumbnail || item.image_url || item.cover_url,
-              cover_url: item.thumbnail || item.image_url || item.cover_url,
-              duration: typeof item.duration === 'string' ? item.duration : formatDuration(item.duration),
-              durationRaw: item.duration,
-              audio_url: item.audio_url,
-              fullTrack: true,
-            }));
+            return tracks.map((item) => {
+              const vidId = item.youtubeId || item.id;
+              const durationSecs = item.durationRaw || (typeof item.duration === 'number' ? item.duration : 210);
+              return {
+                id: vidId,
+                youtubeId: vidId,
+                title: item.title,
+                artist: item.artist || item.artist_name || 'Artist',
+                album: item.album || item.album_name || item.artist || 'YouTube Music',
+                thumbnail: item.thumbnail || item.image_url || item.cover_url,
+                duration: typeof item.duration === 'string' ? item.duration : formatDuration(durationSecs),
+                durationRaw: durationSecs,
+              };
+            });
           }
         }
       } catch (backendErr) {
         console.warn('Backend search warning:', backendErr);
       }
     }
+  } catch (e) {}
 
-    // 1. Try public Piped / Invidious YouTube Music API
-    const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_songs`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.items && data.items.length > 0) {
-        return data.items.map((item) => {
-          const vId = item.url?.replace('/watch?v=', '') || item.id;
-          return {
-            id: vId,
-            youtubeId: vId,
-            youtube_id: vId,
-            title: item.title,
-            artist: item.uploaderName || item.artist || 'Artist',
-            artist_name: item.uploaderName || item.artist || 'Artist',
-            album: item.album || item.uploaderName || 'Official Release',
-            album_name: item.album || item.uploaderName || 'Official Release',
-            thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`,
-            image_url: item.thumbnail || `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`,
-            cover_url: item.thumbnail || `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`,
-            duration: formatDuration(item.duration),
-            durationRaw: item.duration || 210,
-            audio_url: `/api/youtube/stream/${vId}`,
-            fullTrack: true,
-          };
-        });
+  // Array of reliable public YouTube API instances
+  const instances = [
+    'https://pipedapi.kavin.rocks',
+    'https://api.piped.privacy.com.de',
+    'https://invidious.jing.rocks/api/v1'
+  ];
+
+  for (const base of instances) {
+    try {
+      const url = base.includes('invidious')
+        ? `${base}/search?q=${encodeURIComponent(query + ' audio')}&type=video`
+        : `${base}/search?q=${encodeURIComponent(query + ' audio')}&filter=music_songs`;
+
+      const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (res.ok) {
+        const data = await res.json();
+        const items = data.items || data || [];
+        if (items.length > 0) {
+          return items.slice(0, 25).map((item) => {
+            const vidId = item.id || item.videoId || item.url?.replace('/watch?v=', '');
+            const durationSecs = item.duration || item.lengthSeconds || 210;
+            return {
+              id: vidId,
+              youtubeId: vidId,
+              title: item.title?.replace(/(\(Official.*|\(Lyrics.*|\[Official.*|\[Lyrics.*)/gi, '').trim(),
+              artist: item.uploaderName || item.author || 'Artist',
+              album: item.uploaderName || 'YouTube Music',
+              thumbnail: item.thumbnail || item.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg`,
+              duration: formatDuration(durationSecs),
+              durationRaw: durationSecs,
+            };
+          });
+        }
       }
+    } catch (e) {
+      console.warn(`Failed instance ${base}:`, e);
     }
-  } catch (e) {
-    console.warn('Piped search failed, using YouTube Search API:', e);
   }
 
-  // 2. High-quality music fallback with accurate album names and full YouTube play ID
+  // Direct YouTube Scraping Fallback
   try {
-    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=25`);
-    const data = await res.json();
-    return (data.results || []).map((song) => ({
-      id: song.trackId.toString(),
-      title: song.trackName,
-      artist: song.artistName,
-      artist_name: song.artistName,
-      album: song.collectionName || song.collectionCensoredName || 'Official Album',
-      album_name: song.collectionName || song.collectionCensoredName || 'Official Album',
-      thumbnail: song.artworkUrl100?.replace('100x100bb', '600x600bb'),
-      image_url: song.artworkUrl100?.replace('100x100bb', '600x600bb'),
-      cover_url: song.artworkUrl100?.replace('100x100bb', '600x600bb'),
-      duration: formatDuration(song.trackTimeMillis),
-      durationRaw: Math.floor(song.trackTimeMillis / 1000),
-      youtubeQuery: `${song.trackName} ${song.artistName} official audio`,
-      audio_url: song.previewUrl,
-      youtubeId: song.trackId.toString(),
-      youtube_id: song.trackId.toString(),
+    const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(`https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' official audio')}`)}`);
+    const text = await res.text();
+    const videoIds = [...text.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)].map(m => m[1]);
+    const uniqueIds = [...new Set(videoIds)].slice(0, 15);
+
+    return uniqueIds.map((id) => ({
+      id: id,
+      youtubeId: id,
+      title: query,
+      artist: 'YouTube Artist',
+      album: 'YouTube Release',
+      thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      duration: '3:30',
+      durationRaw: 210,
     }));
   } catch (err) {
-    console.error('Track fetch failed:', err);
+    console.error('All YouTube search methods failed:', err);
     return [];
   }
 };
@@ -107,17 +108,10 @@ export const getTrendingTracks = async () => {
         if (res.ok) {
           const data = await res.json();
           const tracks = Array.isArray(data) ? data : (data.tracks || []);
-          if (tracks.length > 0) {
-            return tracks.map((item) => ({
-              ...item,
-              album: item.album || item.album_name || item.artist || 'Trending Music',
-              album_name: item.album || item.album_name || item.artist || 'Trending Music',
-              duration: typeof item.duration === 'string' ? item.duration : formatDuration(item.duration),
-            }));
-          }
+          if (tracks.length > 0) return tracks;
         }
       } catch (e) {}
     }
   } catch (e) {}
-  return searchYouTubeMusic('Top Hits Trending Music 2026');
+  return searchYouTubeMusic('Top Hits 2026 Trending Music');
 };

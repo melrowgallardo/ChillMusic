@@ -208,115 +208,76 @@ const fallbackUnifiedSearch = async (query, limit = 20) => {
     return [];
   };
 
-  // 5. Fast iTunes Songs Search (~250ms direct public API for real metadata & album titles)
+  // 5. Fast YouTube Music Songs Search
   const fetchITunesSongsFast = async () => {
     try {
-      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=30`, 2500);
-      if (json && Array.isArray(json.results)) {
-        return json.results
-          .map((item) => {
-            const cover = item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80';
-            const albumTitle = item.collectionName || item.collectionCensoredName || item.album || 'Single';
-            const genreName = item.primaryGenreName || item.genre || 'Music';
-            const fullDur = Math.floor((item.trackTimeMillis || 210000) / 1000);
-            return {
-              id: `it_song_${item.trackId}`,
-              title: item.trackName || 'Unknown Title',
-              artist: item.artistName || 'Unknown Artist',
-              artist_name: item.artistName || 'Unknown Artist',
-              album: albumTitle,
-              album_title: albumTitle,
-              album_name: albumTitle,
-              genre: genreName,
-              duration: fullDur,
-              image_url: cover,
-              cover_url: cover,
-              image: cover,
-              artwork: cover,
-              preview_url: item.previewUrl || '',
-              audio_url: item.previewUrl || '',
-              source: 'itunes',
-            };
-          })
-          .sort((a, b) => {
-            const qLower = q.toLowerCase();
-            const aArtist = a.artist_name.toLowerCase();
-            const bArtist = b.artist_name.toLowerCase();
-            const aTitle = a.title.toLowerCase();
-            const bTitle = b.title.toLowerCase();
-
-            // 1. Exact artist matches first
-            const aExactArt = aArtist === qLower || aArtist.startsWith(qLower);
-            const bExactArt = bArtist === qLower || bArtist.startsWith(qLower);
-            if (aExactArt && !bExactArt) return -1;
-            if (!aExactArt && bExactArt) return 1;
-
-            // 2. Penalize remix / karaoke / tribute / instrumental covers
-            const aIsRemix = aTitle.includes('remix') || aTitle.includes('karaoke') || aTitle.includes('tribute') || aTitle.includes('cover version');
-            const bIsRemix = bTitle.includes('remix') || bTitle.includes('karaoke') || bTitle.includes('tribute') || bTitle.includes('cover version');
-            if (!aIsRemix && bIsRemix) return -1;
-            if (aIsRemix && !bIsRemix) return 1;
-
-            return 0;
-          });
+      const { searchYouTubeMusic } = await import('./youtubeService');
+      const ytResults = await searchYouTubeMusic(q);
+      if (ytResults && Array.isArray(ytResults)) {
+        return ytResults.map((item) => ({
+          id: item.youtubeId || item.id,
+          youtubeId: item.youtubeId || item.id,
+          title: item.title,
+          artist: item.artist,
+          artist_name: item.artist,
+          album: item.album || 'YouTube Music',
+          album_title: item.album || 'YouTube Music',
+          album_name: item.album || 'YouTube Music',
+          duration: item.durationRaw || 210,
+          image_url: item.thumbnail,
+          cover_url: item.thumbnail,
+          image: item.thumbnail,
+          artwork: item.thumbnail,
+          audio_url: `/api/youtube/stream/${item.youtubeId || item.id}`,
+          source: 'youtube',
+        }));
       }
     } catch (e) {}
     return [];
   };
 
-  // 6. Fast iTunes Albums Search (~250ms direct public API)
+  // 6. Fast YouTube Albums Search
   const fetchITunesAlbums = async () => {
     try {
-      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=25`, 2500);
-      if (json && Array.isArray(json.results)) {
-        return json.results.map((item) => {
-          const cover = item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80';
-          const releaseDate = item.releaseDate ? item.releaseDate.substring(0, 4) : '2024';
-          const albumTitle = item.collectionName || item.collectionCensoredName || 'Unknown Album';
-          return {
-            id: `it_${item.collectionId}`,
-            collectionId: item.collectionId,
-            title: albumTitle,
-            name: albumTitle,
-            artist: item.artistName || 'Unknown Artist',
-            artist_name: item.artistName || 'Unknown Artist',
-            coverUrl: cover,
-            image: cover,
-            image_url: cover,
-            cover_url: cover,
-            releaseDate: releaseDate,
-            release_date: releaseDate,
-            trackCount: item.trackCount || 10,
-            track_count: item.trackCount || 10,
-            source: 'itunes',
-          };
-        });
+      const { searchYouTubeMusic } = await import('./youtubeService');
+      const ytResults = await searchYouTubeMusic(`${q} full album`);
+      if (ytResults && Array.isArray(ytResults)) {
+        return ytResults.map((item) => ({
+          id: `yt_alb_${item.id}`,
+          title: item.title,
+          name: item.title,
+          artist: item.artist,
+          artist_name: item.artist,
+          coverUrl: item.thumbnail,
+          image: item.thumbnail,
+          image_url: item.thumbnail,
+          cover_url: item.thumbnail,
+          releaseDate: '2026',
+          release_date: '2026',
+          trackCount: 10,
+          source: 'youtube',
+        }));
       }
     } catch (e) {}
     return [];
   };
 
-  // 7. Fast iTunes Artists Search (~250ms direct public API)
+  // 7. Fast YouTube Artists Search
   const fetchITunesArtistsFast = async () => {
     try {
-      const json = await fastFetchJson(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=musicArtist&limit=${limit}`, 2500);
-      if (json && Array.isArray(json.results)) {
-        return json.results.map((item) => {
-          const name = item.artistName || 'Unknown Artist';
-          const genre = item.primaryGenreName || 'Artist';
-          return {
-            id: `it_art_${item.artistId}`,
-            name: name,
-            imageUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-            image_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-            cover_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-            image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500&q=80',
-            genres: genre,
-            followers: null,
-            type: 'Artist',
-            source: 'itunes',
-          };
-        });
+      const { searchYouTubeMusic } = await import('./youtubeService');
+      const ytResults = await searchYouTubeMusic(`${q} artist`);
+      if (ytResults && Array.isArray(ytResults)) {
+        return ytResults.slice(0, limit).map((item) => ({
+          id: `yt_art_${item.id}`,
+          name: item.artist || item.title,
+          imageUrl: item.thumbnail,
+          image_url: item.thumbnail,
+          cover_url: item.thumbnail,
+          image: item.thumbnail,
+          genres: 'Artist',
+          source: 'youtube',
+        }));
       }
     } catch (e) {}
     return [];
