@@ -1,130 +1,97 @@
-import React, { useState, useEffect } from 'react';
-import YouTube from 'react-youtube';
+import React, { useState, useEffect, useRef } from 'react';
 import { useMusic } from '../context/MusicContext';
-import { FiPlay, FiPause, FiSkipBack, FiSkipForward, FiVolume2 } from 'react-icons/fi';
+import { FiPlay, FiPause, FiSkipBack, FiSkipForward, FiVolume2, FiVolumeX } from 'react-icons/fi';
 
 export default function MusicPlayer() {
   const { currentTrack, isPlaying, setIsPlaying, nextTrack, prevTrack } = useMusic() || {};
-  const [player, setPlayer] = useState(null);
+  const iframeRef = useRef(null);
   const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState(210); // default fallback seconds
   const [volume, setVolume] = useState(80);
+  const [isMuted, setIsMuted] = useState(false);
 
-  const onReady = (event) => {
-    setPlayer(event.target);
-    try {
-      event.target.setVolume(volume);
-      if (isPlaying) {
-        event.target.playVideo();
-      }
-    } catch (e) {}
-  };
+  // YouTube Video ID extraction
+  const videoId = currentTrack?.youtubeId || currentTrack?.youtube_id || currentTrack?.videoId || currentTrack?.id;
 
-  const onStateChange = (event) => {
-    // 1: Playing, 2: Paused, 0: Ended
-    if (event.data === 1) {
-      if (setIsPlaying) setIsPlaying(true);
-      try {
-        setDuration(event.target.getDuration());
-      } catch (e) {}
-    } else if (event.data === 2) {
-      if (setIsPlaying) setIsPlaying(false);
-    } else if (event.data === 0) {
-      if (nextTrack) nextTrack();
-    }
-  };
-
-  // Sync Play/Pause state
+  // Timer simulation for progress bar when playing
   useEffect(() => {
-    if (player) {
-      try {
-        if (isPlaying) {
-          player.playVideo();
-        } else {
-          player.pauseVideo();
-        }
-      } catch (e) {}
-    }
-  }, [isPlaying, player]);
-
-  // Time progress tracker
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (player && typeof player.getCurrentTime === 'function' && isPlaying) {
-        try {
-          const cur = player.getCurrentTime();
-          if (cur !== undefined && !isNaN(cur)) {
-            setProgress(cur);
+    let timer;
+    if (isPlaying) {
+      timer = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= duration) {
+            if (nextTrack) nextTrack();
+            return 0;
           }
-        } catch (e) {}
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [player, isPlaying]);
+          return prev + 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isPlaying, duration, nextTrack]);
+
+  // Reset progress on track change
+  useEffect(() => {
+    setProgress(0);
+    if (currentTrack?.durationRaw) {
+      setDuration(currentTrack.durationRaw);
+    } else if (typeof currentTrack?.duration === 'number') {
+      setDuration(currentTrack.duration);
+    }
+  }, [currentTrack]);
+
+  const handlePlayToggle = () => {
+    const nextState = !isPlaying;
+    if (setIsPlaying) setIsPlaying(nextState);
+    if (iframeRef.current) {
+      const command = nextState ? 'playVideo' : 'pauseVideo';
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func: command, args: [] }),
+        '*'
+      );
+    }
+  };
 
   const handleSeek = (e) => {
-    const seekTo = parseFloat(e.target.value);
-    setProgress(seekTo);
-    if (player && typeof player.seekTo === 'function') {
-      try {
-        player.seekTo(seekTo, true);
-      } catch (e) {}
+    const newTime = Number(e.target.value);
+    setProgress(newTime);
+    if (iframeRef.current) {
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func: 'seekTo', args: [newTime, true] }),
+        '*'
+      );
     }
   };
 
-  const handleVolume = (e) => {
-    const newVol = parseInt(e.target.value);
-    setVolume(newVol);
-    if (player && typeof player.setVolume === 'function') {
-      try {
-        player.setVolume(newVol);
-      } catch (e) {}
-    }
+  const formatTime = (secs) => {
+    if (isNaN(secs) || secs < 0) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   if (!currentTrack) return null;
 
-  const opts = {
-    height: '0',
-    width: '0',
-    playerVars: {
-      autoplay: 1,
-      controls: 0,
-      disablekb: 1,
-      modestbranding: 1,
-    },
-  };
-
-  const formatTime = (seconds) => {
-    if (isNaN(seconds) || seconds < 0) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Target YouTube ID
-  const ytId = currentTrack.youtubeId || currentTrack.youtube_id || currentTrack.videoId || currentTrack.id;
-
   return (
     <div className="fixed bottom-0 left-0 right-0 h-24 bg-[#12121a] border-t border-[#252836] px-6 flex items-center justify-between z-50">
-      {/* Hidden Full-Length YouTube Audio Engine */}
-      {ytId && (
-        <div className="hidden">
-          <YouTube
-            videoId={ytId}
-            opts={opts}
-            onReady={onReady}
-            onStateChange={onStateChange}
-          />
-        </div>
+      {/* Persistent Hidden YouTube Stream Container */}
+      {videoId && (
+        <iframe
+          ref={iframeRef}
+          key={videoId}
+          title="YouTube Audio Stream"
+          className="absolute -top-[9999px] -left-[9999px] w-1 h-1 pointer-events-none opacity-0"
+          src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&origin=${window.location.origin}`}
+          allow="autoplay"
+        />
       )}
 
-      {/* Left: Track Details */}
-      <div className="flex items-center gap-4 min-w-[200px] max-w-[30%]">
+      {/* Left Track Info */}
+      <div className="flex items-center gap-4 min-w-[220px] max-w-[30%]">
         <img
           src={currentTrack.thumbnail || currentTrack.image_url || currentTrack.cover_url || 'https://via.placeholder.com/60'}
           alt={currentTrack.title || 'Track'}
-          className="w-14 h-14 rounded-lg object-cover shadow-md"
+          className="w-14 h-14 rounded-xl object-cover shadow-lg border border-purple-500/20"
         />
         <div className="overflow-hidden">
           <h4 className="text-white font-semibold text-sm truncate">{currentTrack.title}</h4>
@@ -132,17 +99,17 @@ export default function MusicPlayer() {
         </div>
       </div>
 
-      {/* Center: Controls & Progress Bar */}
+      {/* Center Controls & Full Track Timeline */}
       <div className="flex flex-col items-center gap-2 flex-1 max-w-xl mx-8">
         <div className="flex items-center gap-6">
           <button onClick={prevTrack} className="text-gray-400 hover:text-white transition">
             <FiSkipBack size={18} />
           </button>
           <button
-            onClick={() => setIsPlaying && setIsPlaying(!isPlaying)}
-            className="w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center transition shadow-lg"
+            onClick={handlePlayToggle}
+            className="w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center transition shadow-lg shadow-purple-600/30"
           >
-            {isPlaying ? <FiPause size={20} /> : <FiPlay size={20} className="ml-0.5" />}
+            {isPlaying ? <FiPause size={18} /> : <FiPlay size={18} className="ml-0.5" />}
           </button>
           <button onClick={nextTrack} className="text-gray-400 hover:text-white transition">
             <FiSkipForward size={18} />
@@ -154,7 +121,7 @@ export default function MusicPlayer() {
           <input
             type="range"
             min={0}
-            max={duration || 100}
+            max={duration}
             value={progress}
             onChange={handleSeek}
             className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
@@ -163,15 +130,27 @@ export default function MusicPlayer() {
         </div>
       </div>
 
-      {/* Right: Volume Slider */}
+      {/* Right Volume Controls */}
       <div className="flex items-center gap-3 min-w-[150px] justify-end">
-        <FiVolume2 className="text-gray-400" size={18} />
+        <button onClick={() => setIsMuted(!isMuted)} className="text-gray-400 hover:text-white">
+          {isMuted || volume === 0 ? <FiVolumeX size={18} /> : <FiVolume2 size={18} />}
+        </button>
         <input
           type="range"
           min={0}
           max={100}
-          value={volume}
-          onChange={handleVolume}
+          value={isMuted ? 0 : volume}
+          onChange={(e) => {
+            const val = Number(e.target.value);
+            setVolume(val);
+            setIsMuted(false);
+            if (iframeRef.current) {
+              iframeRef.current.contentWindow.postMessage(
+                JSON.stringify({ event: 'command', func: 'setVolume', args: [val] }),
+                '*'
+              );
+            }
+          }}
           className="w-24 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
         />
       </div>
