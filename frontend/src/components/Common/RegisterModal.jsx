@@ -235,8 +235,18 @@ const RegisterModal = ({ open, onClose, onSuccess }) => {
       }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0, mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <PersonAddOutlinedIcon sx={{ color: 'var(--accent-secondary)' }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2 }}>
+          <Box
+            component="img"
+            src="/logo.png"
+            alt="ChillMusic Logo"
+            sx={{
+              width: 32,
+              height: 32,
+              objectFit: 'contain',
+              borderRadius: '50%',
+            }}
+          />
           <Typography variant="h6" sx={{ fontWeight: 800, fontFamily: 'var(--font-heading)' }}>
             Sign Up for ChillMusic
           </Typography>

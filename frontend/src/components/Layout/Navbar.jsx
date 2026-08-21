@@ -39,6 +39,33 @@ const Navbar = () => {
     >
       {/* Left Navigation Arrows & Search */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 }, flex: 1, minWidth: 0, maxWidth: 500 }}>
+        {/* Mobile Brand Logo */}
+        <Box
+          onClick={() => navigate('/')}
+          sx={{
+            display: { xs: 'flex', md: 'none' },
+            alignItems: 'center',
+            gap: 1.2,
+            cursor: 'pointer',
+            mr: 1,
+          }}
+        >
+          <Box
+            component="img"
+            src="/logo.png"
+            alt="ChillMusic Logo"
+            sx={{
+              width: 32,
+              height: 32,
+              objectFit: 'contain',
+              borderRadius: '50%',
+            }}
+          />
+          <span style={{ fontWeight: 800, fontFamily: 'var(--font-heading)', fontSize: '1.2rem' }} className="text-gradient">
+            ChillMusic
+          </span>
+        </Box>
+
         <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 1 }}>
           <IconButton size="small" onClick={() => navigate(-1)} sx={{ color: 'var(--text-secondary)' }}>
             <ArrowBackIosNewIcon fontSize="small" />

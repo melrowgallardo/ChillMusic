@@ -248,19 +248,17 @@ const Login = () => {
         }}
       >
         <Box
+          component="img"
+          src="/logo.png"
+          alt="ChillMusic Logo"
           sx={{
-            width: 50,
-            height: 50,
-            borderRadius: 'var(--radius-full)',
-            backgroundColor: isResetMode ? 'rgba(236, 72, 153, 0.2)' : 'rgba(124, 58, 237, 0.2)',
-            color: isResetMode ? 'var(--accent-pink)' : 'var(--accent-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            width: 56,
+            height: 56,
+            objectFit: 'contain',
+            borderRadius: '50%',
+            boxShadow: '0 0 20px var(--accent-glow)',
           }}
-        >
-          {isResetMode ? <LockResetIcon /> : <LockOutlinedIcon />}
-        </Box>
+        />
 
         {!isResetMode ? (
           /* LOGIN SCREEN */

@@ -338,19 +338,17 @@ const Register = () => {
         }}
       >
         <Box
+          component="img"
+          src="/logo.png"
+          alt="ChillMusic Logo"
           sx={{
-            width: 50,
-            height: 50,
-            borderRadius: 'var(--radius-full)',
-            backgroundColor: 'rgba(6, 182, 212, 0.2)',
-            color: 'var(--accent-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            width: 56,
+            height: 56,
+            objectFit: 'contain',
+            borderRadius: '50%',
+            boxShadow: '0 0 20px var(--accent-glow)',
           }}
-        >
-          <PersonAddOutlinedIcon />
-        </Box>
+        />
 
         <Box sx={{ textAlign: 'center' }}>
           <Typography variant="h5" sx={{ fontWeight: 800, fontFamily: 'var(--font-heading)' }}>
