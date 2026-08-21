@@ -6,14 +6,21 @@ import { initializeFirestore, getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBDAj5DJMzrbscqmGLfxLOoM034AYDgEEw",
-  authDomain: "chillmusicapp.firebaseapp.com",
-  projectId: "chillmusicapp",
-  storageBucket: "chillmusicapp.firebasestorage.app",
-  messagingSenderId: "526233858504",
-  appId: "1:526233858504:web:b3d400e05981ec15c1d0fd",
-  measurementId: "G-DLLFQ86S2G"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBDAj5DJMzrbscqmGLfxLOoM034AYDgEEw",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "chillmusicapp.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "chillmusicapp",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "chillmusicapp.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "526233858504",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:526233858504:web:b3d400e05981ec15c1d0fd",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-DLLFQ86S2G"
 };
+
+// Config validation log
+if (!firebaseConfig.apiKey || !firebaseConfig.authDomain) {
+  console.error("[Firebase Config Error] Critical Firebase keys (apiKey or authDomain) are missing or undefined!", firebaseConfig);
+} else {
+  console.log("[Firebase Config] Firebase initialized with authDomain:", firebaseConfig.authDomain);
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

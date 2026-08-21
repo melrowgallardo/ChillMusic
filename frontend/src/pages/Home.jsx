@@ -26,6 +26,7 @@ import { getHistory } from '../services/firestoreService';
 const Home = () => {
   const { playTrack, currentTrack, isPlaying, togglePlayPause, recentlyPlayed, favorites } = usePlayer();
   const { user } = useAuth();
+  const [randomFeaturedTrack, setRandomFeaturedTrack] = useState(null);
   const [recentTracks, setRecentTracks] = useState([]);
   const [hitsTracks, setHitsTracks] = useState([]);
   const [trendingTracks, setTrendingTracks] = useState([]);
@@ -43,7 +44,6 @@ const Home = () => {
   const safeChillTracks = Array.isArray(chillTracks) ? chillTracks : [];
 
   const displayedRecent = safeRecentlyPlayed.length > 0 ? safeRecentlyPlayed : safeRecentTracks;
-
 
   useEffect(() => {
     let isMounted = true;
@@ -67,6 +67,12 @@ const Home = () => {
               setChillTracks(parsed.chillTracks || []);
               setFeaturedPlaylists(parsed.featuredPlaylists || []);
               if (parsed.artists) setArtists(parsed.artists);
+
+              const pool = parsed.hitsTracks.length > 0 ? parsed.hitsTracks : (parsed.trendingTracks || []);
+              if (pool.length > 0) {
+                const randomIdx = Math.floor(Math.random() * pool.length);
+                setRandomFeaturedTrack(pool[randomIdx]);
+              }
               setLoading(false);
             }
             return;
@@ -130,6 +136,12 @@ const Home = () => {
             setArtists(Array.isArray(artistsRes) ? artistsRes : []);
           }
 
+          const pool = hits.length > 0 ? hits : (trending.length > 0 ? trending : (newRel.length > 0 ? newRel : chill));
+          if (Array.isArray(pool) && pool.length > 0) {
+            const randomIdx = Math.floor(Math.random() * pool.length);
+            setRandomFeaturedTrack(pool[randomIdx]);
+          }
+
           try {
             sessionStorage.setItem(
               cacheKey,
@@ -158,13 +170,6 @@ const Home = () => {
     };
   }, [user]);
 
-  const heroTrack =
-    currentTrack ||
-    (hitsTracks && hitsTracks.length > 0 ? hitsTracks[0] : null) ||
-    (trendingTracks && trendingTracks.length > 0 ? trendingTracks[0] : null) ||
-    (newReleaseTracks && newReleaseTracks.length > 0 ? newReleaseTracks[0] : null) ||
-    (chillTracks && chillTracks.length > 0 ? chillTracks[0] : null);
-
   const trackPool =
     hitsTracks.length > 0
       ? hitsTracks
@@ -174,8 +179,13 @@ const Home = () => {
       ? newReleaseTracks
       : chillTracks;
 
+  const heroTrack =
+    currentTrack ||
+    randomFeaturedTrack ||
+    (trackPool.length > 0 ? trackPool[0] : null);
+
   const isCurrentHeroTrack = Boolean(
-    currentTrack && heroTrack && String(currentTrack.id) === String(heroTrack.id)
+    currentTrack && heroTrack && String(currentTrack.id || currentTrack.videoId) === String(heroTrack.id || heroTrack.videoId)
   );
   const isBannerPlaying = isCurrentHeroTrack && isPlaying;
 
@@ -183,7 +193,10 @@ const Home = () => {
     if (isCurrentHeroTrack) {
       togglePlayPause();
     } else if (heroTrack) {
-      playTrack(heroTrack, trackPool, 0);
+      const heroIndex = trackPool.findIndex(
+        (t) => String(t.id || t.videoId) === String(heroTrack.id || heroTrack.videoId)
+      );
+      playTrack(heroTrack, trackPool, heroIndex >= 0 ? heroIndex : 0);
     }
   };
 
@@ -227,7 +240,7 @@ const Home = () => {
               {heroTrack.title}
             </Typography>
             <Typography variant="body1" sx={{ color: 'var(--text-secondary)', mb: 3 }}>
-              By {heroTrack.artist_name || heroTrack.artist || 'Featured Artist'}
+              By {heroTrack.artist_name || heroTrack.artist || heroTrack.channelTitle || heroTrack.uploader || 'Featured Artist'}
             </Typography>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button

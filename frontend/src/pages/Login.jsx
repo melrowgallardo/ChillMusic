@@ -59,6 +59,12 @@ const formatErrorMessage = (err) => {
       return 'Invalid email address format.';
     case 'auth/user-disabled':
       return 'This user account has been disabled.';
+    case 'auth/unauthorized-domain':
+      console.error('[Firebase Auth Error] auth/unauthorized-domain: This domain is not authorized in Firebase Console > Authentication > Settings > Authorized domains. Please add localhost or your custom domain to Authorized Domains.');
+      return 'Authentication failed: Domain unauthorized in Firebase Console.';
+    case 'auth/popup-blocked':
+      console.error('[Firebase Auth Error] auth/popup-blocked: Sign-in popup was blocked by the browser.');
+      return 'Sign-in popup was blocked by browser. Please allow popups for this site.';
     case 'auth/network-request-failed':
       return 'Network error. Please check your internet connection.';
     default:
