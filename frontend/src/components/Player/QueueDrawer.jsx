@@ -186,7 +186,7 @@ const QueueDrawer = () => {
                   <ListItemAvatar sx={{ minWidth: 48, mr: 1 }}>
                     <Avatar
                       src={
-                        (track.cover || track.image_url || track.cover_url || track.image || track.artwork || '/default-cover.png')
+                        (track.coverUrl || track.cover_url || track.cover || track.thumbnail || track.thumbnailUrl || track.image_url || track.image || track.artwork || '/default-cover.png')
                           .replace('100x100bb', '300x300bb')
                           .replace('1000x1000bb', '300x300bb')
                       }
@@ -194,7 +194,10 @@ const QueueDrawer = () => {
                         loading: 'lazy',
                         decoding: 'async',
                         onError: (e) => {
-                          e.target.src = '/default-cover.png';
+                          if (!e.target.dataset.triedFallback) {
+                            e.target.dataset.triedFallback = 'true';
+                            e.target.src = '/default-cover.png';
+                          }
                         },
                       }}
                       variant="rounded"

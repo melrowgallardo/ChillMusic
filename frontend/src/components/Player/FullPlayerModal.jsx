@@ -201,7 +201,25 @@ const FullPlayerModal = () => {
       >
         {viewMode === 'cover' ? (
           <Avatar
-            src={currentTrack.image_url || currentTrack.cover_url || currentTrack.image || currentTrack.artwork || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80'}
+            src={
+              currentTrack.coverUrl ||
+              currentTrack.cover_url ||
+              currentTrack.cover ||
+              currentTrack.thumbnail ||
+              currentTrack.thumbnailUrl ||
+              currentTrack.image_url ||
+              currentTrack.image ||
+              currentTrack.artwork ||
+              '/default-cover.png'
+            }
+            imgProps={{
+              onError: (e) => {
+                if (!e.target.dataset.triedFallback) {
+                  e.target.dataset.triedFallback = 'true';
+                  e.target.src = '/default-cover.png';
+                }
+              },
+            }}
             variant="rounded"
             sx={{
               width: { xs: 260, sm: 320 },

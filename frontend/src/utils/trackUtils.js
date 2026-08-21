@@ -5,9 +5,11 @@ export const normalizeTrack = (track) => {
   if (!track) return null;
   const audio = track.audioUrl || track.audio_url || track.streamUrl || track.stream_url || track.url || '';
   const rawCover =
-    track.cover ||
     track.coverUrl ||
     track.cover_url ||
+    track.cover ||
+    track.thumbnail ||
+    track.thumbnailUrl ||
     track.image ||
     track.image_url ||
     track.artwork ||
@@ -23,7 +25,7 @@ export const normalizeTrack = (track) => {
 
   return {
     ...track,
-    id: String(track.id || track.trackId || Date.now() + Math.random()),
+    id: String(track.id || track.trackId || track.youtubeId || Date.now() + Math.random()),
     title,
     artist,
     artist_name: artist,
@@ -31,9 +33,13 @@ export const normalizeTrack = (track) => {
     album_name: album,
     duration,
     cover,
+    coverUrl: cover,
     cover_url: cover,
+    thumbnail: cover,
+    thumbnailUrl: cover,
     image_url: cover,
     image: cover,
+    artwork: cover,
     audioUrl: audio,
     audio_url: audio,
   };

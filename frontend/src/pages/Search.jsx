@@ -44,16 +44,27 @@ export default function Search() {
             const secs = parseInt(match?.[3] || 0, 10);
             const formattedDur = `${mins}:${secs.toString().padStart(2, '0')}`;
 
+            const coverArt =
+              item.snippet?.thumbnails?.high?.url ||
+              item.snippet?.thumbnails?.medium?.url ||
+              item.snippet?.thumbnails?.default?.url ||
+              `https://i.ytimg.com/vi/${item.id?.videoId || item.id}/hqdefault.jpg`;
+
             return {
               id: item.id?.videoId || item.id,
               youtubeId: item.id?.videoId || item.id,
               title: item.snippet?.title?.replace(/(&quot;|&#39;|&amp;)/g, '').trim(),
               artist: item.snippet?.channelTitle || 'Artist',
+              artist_name: item.snippet?.channelTitle || 'Artist',
               album: item.snippet?.channelTitle || 'Single',
-              thumbnail:
-                item.snippet?.thumbnails?.medium?.url ||
-                item.snippet?.thumbnails?.high?.url ||
-                `https://i.ytimg.com/vi/${item.id?.videoId || item.id}/hqdefault.jpg`,
+              album_name: item.snippet?.channelTitle || 'Single',
+              coverUrl: coverArt,
+              cover_url: coverArt,
+              cover: coverArt,
+              thumbnail: coverArt,
+              thumbnailUrl: coverArt,
+              image_url: coverArt,
+              image: coverArt,
               duration: formattedDur !== '0:00' ? formattedDur : '3:30',
               durationRaw: mins * 60 + secs || 210,
             };
@@ -74,13 +85,22 @@ export default function Search() {
             const totalSeconds = Math.floor(track.trackTimeMillis / 1000);
             const mins = Math.floor(totalSeconds / 60);
             const secs = totalSeconds % 60;
+            const coverArt = track.artworkUrl100?.replace('100x100bb', '400x400bb') || track.artworkUrl60 || '/default-cover.png';
             return {
               id: track.trackId.toString(),
               youtubeId: track.trackId.toString(),
               title: track.trackName,
               artist: track.artistName,
+              artist_name: track.artistName,
               album: track.collectionName || 'Single',
-              thumbnail: track.artworkUrl100?.replace('100x100bb', '400x400bb'),
+              album_name: track.collectionName || 'Single',
+              coverUrl: coverArt,
+              cover_url: coverArt,
+              cover: coverArt,
+              thumbnail: coverArt,
+              thumbnailUrl: coverArt,
+              image_url: coverArt,
+              image: coverArt,
               duration: `${mins}:${secs.toString().padStart(2, '0')}`,
               durationRaw: totalSeconds,
             };
@@ -216,7 +236,7 @@ export default function Search() {
                       {isCurrent && isPlaying ? <FiPause style={{ color: '#a855f7' }} /> : idx + 1}
                     </td>
                     <td style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                      <img src={track.thumbnail} alt={track.title} style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover' }} />
+                      <img src={track.coverUrl || track.cover || track.thumbnail || track.image_url || '/default-cover.png'} alt={track.title} style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover' }} />
                       <div>
                         <p style={{ margin: 0, fontWeight: '700', fontSize: '15px', color: isCurrent ? '#a855f7' : '#ffffff' }}>{track.title}</p>
                         <p style={{ margin: '3px 0 0 0', fontSize: '12px', color: '#64748b' }}>{track.artist}</p>

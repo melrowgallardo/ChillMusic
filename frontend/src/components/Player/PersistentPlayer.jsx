@@ -78,7 +78,7 @@ const PersistentPlayer = () => {
       >
         <Avatar
           src={
-            (currentTrack.cover || currentTrack.image_url || currentTrack.cover_url || currentTrack.image || currentTrack.artwork || '/default-cover.png')
+            (currentTrack.coverUrl || currentTrack.cover_url || currentTrack.cover || currentTrack.thumbnail || currentTrack.thumbnailUrl || currentTrack.image_url || currentTrack.image || currentTrack.artwork || '/default-cover.png')
               .replace('100x100bb', '300x300bb')
               .replace('1000x1000bb', '300x300bb')
           }
@@ -86,7 +86,10 @@ const PersistentPlayer = () => {
             loading: 'lazy',
             decoding: 'async',
             onError: (e) => {
-              e.target.src = '/default-cover.png';
+              if (!e.target.dataset.triedFallback) {
+                e.target.dataset.triedFallback = 'true';
+                e.target.src = '/default-cover.png';
+              }
             },
           }}
           variant="rounded"
@@ -115,7 +118,7 @@ const PersistentPlayer = () => {
             {currentTrack.title}
           </Typography>
           <Typography variant="caption" sx={{ color: 'var(--text-muted)' }} noWrap>
-            {currentTrack.artist_name}
+            {currentTrack.artist_name || currentTrack.artist || 'Unknown Artist'}
           </Typography>
         </Box>
         <AudioVisualizer isPlaying={isPlaying} />
