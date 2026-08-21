@@ -122,12 +122,13 @@ export default function Search() {
           flex: 1,
           display: 'flex',
           alignItems: 'center',
-          backgroundColor: '#205c96',
+          backgroundColor: '#1A1D21',
+          border: '1px solid #3A3F47',
           borderRadius: '12px',
           padding: '0 20px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
         }}>
-          <FiSearch style={{ color: '#9bc4e8', fontSize: '20px', marginRight: '14px', flexShrink: 0 }} />
+          <FiSearch style={{ color: '#94a3b8', fontSize: '20px', marginRight: '14px', flexShrink: 0 }} />
           <input
             type="text"
             value={searchQuery}
